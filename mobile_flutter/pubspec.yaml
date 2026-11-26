@@ -1,0 +1,60 @@
+name: arcvault_mobile
+description: "ArcVault (穹档) - Local-First E2EE Personal Digital Archive & Academic Writing Studio (Mobile & Tablet Flutter Edition)"
+publish_to: 'none'
+version: 0.4.0+1
+
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+  flutter: '>=3.29.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Liquid Glass (whynotmake-it/flutter_liquid_glass)
+  liquid_glass_renderer: 0.2.0-dev.4
+
+  # Material 3 Expressive Monet Engine (HCT & Dynamic Schemes)
+  material_color_utilities: ^0.11.1
+
+  # Icons & Typography
+  lucide_icons_flutter: ^3.0.0
+
+  # Academic Rendering (Markdown & LaTeX KaTeX)
+  flutter_markdown: ^0.7.6
+  flutter_math_fork: ^0.7.3
+
+  # Pure-Dart OOXML (.docx / .pptx / .xlsx) & Diff
+  archive: ^4.0.4
+  xml: ^6.5.0
+  diff_match_patch: ^0.4.1
+
+  # Cryptography & Hashing (Desktop-compatible PBKDF2-HMAC-SHA256 + AES-256-GCM)
+  cryptography: ^2.7.0
+  crypto: ^3.0.6
+
+  # Networking & Sync (WebDAV / S3 / LAN Direct)
+  http: ^1.3.0
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^6.0.7
+
+  # Local Storage, File Picking, Camera Scan, Biometrics & Permissions
+  shared_preferences: ^2.5.2
+  path_provider: ^2.1.5
+  file_picker: ^9.0.2
+  image_picker: ^1.1.2
+  image: ^4.5.2
+  share_plus: ^10.1.4
+  local_auth: ^2.3.0
+  permission_handler: ^11.4.0
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

@@ -56,3 +56,20 @@ npm run tauri ios build
 - **手机竖屏 (390×844)**：左侧抽屉、底部键盘快捷学术条、点正文高亮弹出半屏批注卡片、吸边句库浮钮。
 - **平板竖屏 (820×1120)**：紧凑抽屉 + 半屏批注 Sheet + 触控放大手柄。
 - **平板横屏 (1180×800)**：展开近桌面多栏 + Arc-Link 光学连线 + 加宽触控分隔条。
+
+## 4. 移动端独立 Flutter 工程（手机 + 平板 · 推荐）
+仓库新增 [`mobile_flutter/`](../mobile_flutter/README.md) 独立 Flutter 工程，覆盖 **Android（手机 + 平板）** 与 **iOS / iPadOS**：
+```bash
+cd mobile_flutter
+flutter pub get
+flutter test
+flutter run                  # 连接 Android/iOS 真机或模拟器
+flutter build apk --release  # 构建 Android 安装包
+```
+- **沉浸式状态栏**：采用 `SystemUiMode.edgeToEdge` 与 Android `enableEdgeToEdge()`，状态栏始终可见且颜色/图标明暗随主题自动融合。
+- **主题差异**：移动端弃用「天象光影」与「实时天气」，新增基于开源 `liquid_glass_renderer` 的 **液态玻璃（Liquid Glass）** 主题，支持设置页自定义光学参数与仅在设置-外观与主题页绘制的预览底栏开关。
+
+在 Windows / macOS 启动应用（或 `npm run dev`）后，打开 **设置 → 多端与触控 → 模拟预览设备**，即可一键切换：
+- **手机竖屏 (390×844)**：左侧抽屉、底部键盘快捷学术条、点正文高亮弹出半屏批注卡片、吸边句库浮钮。
+- **平板竖屏 (820×1120)**：紧凑抽屉 + 半屏批注 Sheet + 触控放大手柄。
+- **平板横屏 (1180×800)**：展开近桌面多栏 + Arc-Link 光学连线 + 加宽触控分隔条。
