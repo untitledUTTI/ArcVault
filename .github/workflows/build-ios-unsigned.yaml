@@ -1,0 +1,53 @@
+name: 'build-ios-unsigned'
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Init iOS project (if not already)
+        run: npm run tauri ios init
+
+      - name: Build iOS (unsigned)
+        run: |
+          npm run tauri ios build -- --ci 2>&1 | tee build.log || {
+            EXIT_CODE=$?
+            # 构建可能因导出签名失败而返回非零，但 .app 文件已生成
+            APP_FOUND=$(find src-tauri/gen/apple -path "*/Products/Applications/*.app" -type d)
+            if [ -n "$APP_FOUND" ]; then
+              echo "✅ .app 文件已生成，忽略导出失败"
+              exit 0
+            fi
+            exit $EXIT_CODE
+          }
+
+      - name: Package unsigned IPA
+        run: |
+          APP_PATH=$(find src-tauri/gen/apple -path "*/Products/Applications/*.app" -type d | head -1)
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          chmod -R 755 Payload/
+          chmod 644 Payload/*.app/Info.plist 2>/dev/null || true
+          zip -r -q YourApp-unsigned.ipa Payload/
+          echo "IPA 已生成：$(ls -lh YourApp-unsigned.ipa)"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-ipa
+          path: YourApp-unsigned.ipa
