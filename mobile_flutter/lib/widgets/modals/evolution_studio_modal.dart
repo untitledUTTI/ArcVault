@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../core/tutorial_flow.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
 import '../../theme/liquid_glass_surface.dart';
 
 class EvolutionStudioModal extends StatefulWidget {
-  const EvolutionStudioModal({super.key, required this.controller});
+  const EvolutionStudioModal({super.key, required this.controller, this.onClose});
   final AppController controller;
+  final VoidCallback? onClose;
 
   @override
   State<EvolutionStudioModal> createState() => _EvolutionStudioModalState();
@@ -27,6 +29,7 @@ class _EvolutionStudioModalState extends State<EvolutionStudioModal> {
     final snapText = activeSnap != null ? (c.cas.get(activeSnap.contentHash) ?? '') : '';
 
     return ArcLiquidGlassSurface(
+      key: c.tourTargets.keyFor(TutorialTargetId.evolutionStudioModal),
       liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       child: SizedBox(
@@ -43,7 +46,9 @@ class _EvolutionStudioModalState extends State<EvolutionStudioModal> {
                     child: Text(isZh ? '写作热力图 & 进化延时回放' : 'Writing Heatmap & Evolution Replay',
                         style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: t.textPrimary)),
                   ),
-                  IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(LucideIcons.x, size: 18)),
+                  IconButton(
+                      onPressed: () => (widget.onClose ?? () => Navigator.of(context).pop())(),
+                      icon: const Icon(LucideIcons.x, size: 18)),
                 ],
               ),
             ),

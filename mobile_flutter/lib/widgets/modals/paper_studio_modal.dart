@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/academic_engines.dart';
+import '../../core/tutorial_flow.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
 import '../../theme/liquid_glass_surface.dart';
 
 class PaperStudioModal extends StatefulWidget {
-  const PaperStudioModal({super.key, required this.controller});
+  const PaperStudioModal({super.key, required this.controller, this.onClose});
   final AppController controller;
+  final VoidCallback? onClose;
 
   @override
   State<PaperStudioModal> createState() => _PaperStudioModalState();
@@ -37,6 +39,7 @@ class _PaperStudioModalState extends State<PaperStudioModal> {
         : ConsistencyChecker.runCheck(doc.activeText, citationsSidecar: doc.citationsSidecar);
 
     return ArcLiquidGlassSurface(
+      key: c.tourTargets.keyFor(TutorialTargetId.paperStudioModal),
       liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       child: SizedBox(
@@ -53,7 +56,9 @@ class _PaperStudioModalState extends State<PaperStudioModal> {
                     child: Text(isZh ? '学术一致性体检 & Rebuttal 返修' : 'Consistency & Rebuttal Studio',
                         style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: t.textPrimary)),
                   ),
-                  IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(LucideIcons.x, size: 18)),
+                  IconButton(
+                      onPressed: () => (widget.onClose ?? () => Navigator.of(context).pop())(),
+                      icon: const Icon(LucideIcons.x, size: 18)),
                 ],
               ),
             ),

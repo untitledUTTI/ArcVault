@@ -7,6 +7,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/academic_engines.dart';
 import '../../core/open_source_licenses.dart';
+import '../../core/tutorial_flow.dart';
 import '../../i18n/dictionaries.dart';
 import '../../models/archive_models.dart';
 import '../../state/app_controller.dart';
@@ -23,11 +24,13 @@ class SettingsModal extends StatefulWidget {
     required this.controller,
     this.initialTab = SettingsTab.appearance,
     required this.onOpenSync,
+    this.onClose,
   });
 
   final AppController controller;
   final SettingsTab initialTab;
   final VoidCallback onOpenSync;
+  final VoidCallback? onClose;
 
   @override
   State<SettingsModal> createState() => _SettingsModalState();
@@ -37,6 +40,14 @@ class _SettingsModalState extends State<SettingsModal> {
   late SettingsTab _tab = widget.initialTab;
   bool _testingAi = false;
   String? _aiTestResult;
+
+  @override
+  void didUpdateWidget(covariant SettingsModal oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTab != widget.initialTab) {
+      _tab = widget.initialTab;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +65,7 @@ class _SettingsModalState extends State<SettingsModal> {
         s.liquidGlass.previewBarEnabled;
 
     return Scaffold(
+      key: c.tourTargets.keyFor(TutorialTargetId.settingsModal),
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
@@ -84,7 +96,7 @@ class _SettingsModalState extends State<SettingsModal> {
                       ),
                     ),
                     TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () => (widget.onClose ?? () => Navigator.of(context).pop())(),
                       child: Text(d.done, style: TextStyle(color: t.accent, fontWeight: FontWeight.w700)),
                     ),
                   ],
@@ -206,6 +218,7 @@ class _SettingsModalState extends State<SettingsModal> {
 
     return [
       ArcFrostedCardSurface(
+        key: c.tourTargets.keyFor(TutorialTargetId.settingsThemesCard),
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -784,7 +797,7 @@ class _SettingsModalState extends State<SettingsModal> {
               children: [
                 OutlinedButton.icon(
                   onPressed: () {
-                    Navigator.of(context).pop();
+                    (widget.onClose ?? () => Navigator.of(context).pop())();
                     widget.onOpenSync();
                   },
                   icon: const Icon(LucideIcons.wifi, size: 14),
@@ -792,7 +805,7 @@ class _SettingsModalState extends State<SettingsModal> {
                 ),
                 OutlinedButton.icon(
                   onPressed: () {
-                    Navigator.of(context).pop();
+                    (widget.onClose ?? () => Navigator.of(context).pop())();
                     c.openTutorialReplay();
                   },
                   icon: const Icon(LucideIcons.bookOpen, size: 14),

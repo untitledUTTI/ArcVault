@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../core/tutorial_flow.dart';
 import '../i18n/dictionaries.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
@@ -19,6 +20,7 @@ class AnnotationSidebar extends StatelessWidget {
     final anns = doc?.annotations ?? const <AnnotationItem>[];
 
     return Container(
+      key: controller.tourTargets.keyFor(TutorialTargetId.annotationSidebar),
       decoration: BoxDecoration(
         color: t.isLiquidGlass ? t.bgSurface.withValues(alpha: 0.55) : t.bgSurface,
         border: Border(left: BorderSide(color: t.borderSubtle)),
@@ -57,7 +59,10 @@ class AnnotationSidebar extends StatelessWidget {
                       final badgeColor =
                           ann.type == AnnotationType.comment ? t.commentColor : t.revisionColor;
                       return InkWell(
-                        onTap: () => controller.selectAnnotation(ann.id),
+                        onTap: () {
+                          controller.selectAnnotation(ann.id);
+                          controller.notifyTutorialAction(TutorialActionId.selectAnnotation);
+                        },
                         borderRadius: BorderRadius.circular(t.radiusSm),
                         child: ArcFrostedCardSurface(
                           isActive: selected,

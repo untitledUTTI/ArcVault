@@ -62,6 +62,7 @@ class AppController extends ChangeNotifier {
   Timer? _autosaveTimer;
 
   TutorialMode? _tutorialMode;
+  final TutorialTargetRegistry tourTargets = TutorialTargetRegistry();
   String? _selectedAnnotationId;
   String? _pendingShareTitle;
   String? _pendingShareText;
@@ -1106,6 +1107,52 @@ class AppController extends ChangeNotifier {
   }
 
   // Tutorial control
+  void notifyTutorialAction(TutorialActionId action) {
+    if (_tutorialMode != null) {
+      tourTargets.notifyAction(action);
+    }
+  }
+
+  void setSplitPreview(bool value) {
+    if (_splitPreview == value) return;
+    _splitPreview = value;
+    notifyListeners();
+  }
+
+  void setActiveFormatForDoc(String docId, EditorFormat format) {
+    final idx = _documents.indexWhere((d) => d.id == docId);
+    if (idx < 0) return;
+    final doc = _documents[idx];
+    if (doc.activeFormat == format) return;
+    final syncedText = OoxmlEngine.syncFormatText(doc.activeText, doc.activeFormat, format);
+    _documents[idx] = doc.copyWith(
+      activeFormat: format,
+      markdownText: format == EditorFormat.markdown ? syncedText : doc.markdownText,
+      latexText: format == EditorFormat.latex ? syncedText : doc.latexText,
+      updatedAt: DateTime.now().toIso8601String(),
+    );
+    notifyListeners();
+  }
+
+  void ensureDemoSceneDocument(String preferredDocId, String fallbackSpaceId) {
+    final active = _documents.where((d) => !d.isTrashed).toList();
+    ArchiveDocument? target = active.where((d) => d.id == preferredDocId).firstOrNull;
+    target ??= active.where((d) => d.spaceId == fallbackSpaceId).firstOrNull;
+    target ??= active.firstOrNull;
+    if (target == null) {
+      _activeSpaceId = fallbackSpaceId;
+      _activeDocId = null;
+      notifyListeners();
+      return;
+    }
+    _activeSpaceId = target.spaceId;
+    _activeDocId = target.id;
+    if (target.annotations.isNotEmpty && _selectedAnnotationId == null) {
+      _selectedAnnotationId = target.annotations.first.id;
+    }
+    notifyListeners();
+  }
+
   void openTutorialReplay() {
     _tutorialMode = TutorialMode.replay;
     notifyListeners();
@@ -1167,6 +1214,7 @@ class AppController extends ChangeNotifier {
   void dispose() {
     _toastTimer?.cancel();
     _autosaveTimer?.cancel();
+    tourTargets.dispose();
     super.dispose();
   }
 }

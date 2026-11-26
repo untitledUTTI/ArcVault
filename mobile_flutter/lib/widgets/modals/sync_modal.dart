@@ -3,14 +3,16 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/sync_engine.dart';
+import '../../core/tutorial_flow.dart';
 import '../../models/archive_models.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
 import '../../theme/liquid_glass_surface.dart';
 
 class SyncModal extends StatefulWidget {
-  const SyncModal({super.key, required this.controller});
+  const SyncModal({super.key, required this.controller, this.onClose});
   final AppController controller;
+  final VoidCallback? onClose;
 
   @override
   State<SyncModal> createState() => _SyncModalState();
@@ -47,6 +49,7 @@ class _SyncModalState extends State<SyncModal> {
     );
 
     return ArcLiquidGlassSurface(
+      key: c.tourTargets.keyFor(TutorialTargetId.syncModal),
       liquidGlassSettings: s.liquidGlass,
       borderRadius: 24,
       child: SizedBox(
@@ -63,7 +66,9 @@ class _SyncModalState extends State<SyncModal> {
                     child: Text(isZh ? '多端 E2EE 加密同步中心' : 'E2EE Cross-Device Sync',
                         style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: t.textPrimary)),
                   ),
-                  IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(LucideIcons.x, size: 18)),
+                  IconButton(
+                      onPressed: () => (widget.onClose ?? () => Navigator.of(context).pop())(),
+                      icon: const Icon(LucideIcons.x, size: 18)),
                 ],
               ),
             ),

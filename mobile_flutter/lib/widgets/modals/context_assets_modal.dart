@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../core/tutorial_flow.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
 import '../../theme/liquid_glass_surface.dart';
 
 class ContextAssetsModal extends StatefulWidget {
-  const ContextAssetsModal({super.key, required this.controller});
+  const ContextAssetsModal({super.key, required this.controller, this.onClose});
   final AppController controller;
+  final VoidCallback? onClose;
 
   @override
   State<ContextAssetsModal> createState() => _ContextAssetsModalState();
@@ -33,6 +35,7 @@ class _ContextAssetsModalState extends State<ContextAssetsModal> {
     final assets = doc != null ? c.assetsForDoc(doc.id) : const [];
 
     return ArcLiquidGlassSurface(
+      key: c.tourTargets.keyFor(TutorialTargetId.contextAssetsModal),
       liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       child: SizedBox(
@@ -49,7 +52,9 @@ class _ContextAssetsModalState extends State<ContextAssetsModal> {
                     child: Text(isZh ? '修改动机留痕 & 科研关联资产' : 'Motivations & Research Assets',
                         style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: t.textPrimary)),
                   ),
-                  IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(LucideIcons.x, size: 18)),
+                  IconButton(
+                      onPressed: () => (widget.onClose ?? () => Navigator.of(context).pop())(),
+                      icon: const Icon(LucideIcons.x, size: 18)),
                 ],
               ),
             ),

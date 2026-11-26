@@ -4,6 +4,7 @@ import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../core/academic_engines.dart';
+import '../core/tutorial_flow.dart';
 import '../i18n/dictionaries.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
@@ -199,11 +200,13 @@ class _EditorWorkspaceState extends State<EditorWorkspace> {
         : t.bgApp;
 
     return Container(
+      key: c.tourTargets.keyFor(TutorialTargetId.workspaceMain),
       color: editorSurfaceColor,
       child: Column(
         children: [
           // Metadata / Privacy / Cover / Citations Bar
           Container(
+            key: c.tourTargets.keyFor(TutorialTargetId.editorAiBar),
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
@@ -229,7 +232,11 @@ class _EditorWorkspaceState extends State<EditorWorkspace> {
                     const SizedBox(width: 8),
                   ],
                   InkWell(
-                    onTap: c.cycleActiveDocAiPolicy,
+                    key: c.tourTargets.keyFor(TutorialTargetId.editorAiPolicyBtn),
+                    onTap: () {
+                      c.cycleActiveDocAiPolicy();
+                      c.notifyTutorialAction(TutorialActionId.cycleAiPolicy);
+                    },
                     borderRadius: BorderRadius.circular(10),
                     child: _BannerChip(
                       icon: LucideIcons.shieldCheck,

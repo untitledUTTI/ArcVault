@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../core/academic_engines.dart';
+import '../core/tutorial_flow.dart';
 import '../i18n/dictionaries.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
@@ -60,10 +61,12 @@ class _MobileAnnotationSheetState extends State<MobileAnnotationSheet> {
         if (vx < -200) {
           c.triggerHaptic(HapticPattern.selection);
           c.selectAnnotation(ordered[(idx + 1) % ordered.length].id);
+          c.notifyTutorialAction(TutorialActionId.selectAnnotation);
           setState(() => _aiPreviewText = null);
         } else if (vx > 200) {
           c.triggerHaptic(HapticPattern.selection);
           c.selectAnnotation(ordered[(idx - 1 + ordered.length) % ordered.length].id);
+          c.notifyTutorialAction(TutorialActionId.selectAnnotation);
           setState(() => _aiPreviewText = null);
         }
       },
@@ -71,6 +74,7 @@ class _MobileAnnotationSheetState extends State<MobileAnnotationSheet> {
         constraints: BoxConstraints(maxHeight: maxH),
         margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
         child: ArcLiquidGlassSurface(
+          key: c.tourTargets.keyFor(TutorialTargetId.mobileAnnotationSheet),
           liquidGlassSettings: s.liquidGlass,
           borderRadius: 24,
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
@@ -106,6 +110,7 @@ class _MobileAnnotationSheetState extends State<MobileAnnotationSheet> {
                     IconButton(
                       onPressed: () {
                         c.selectAnnotation(ordered[(idx - 1 + ordered.length) % ordered.length].id);
+                        c.notifyTutorialAction(TutorialActionId.selectAnnotation);
                         setState(() => _aiPreviewText = null);
                       },
                       icon: Icon(LucideIcons.chevronLeft, size: 16, color: t.textSecondary),
@@ -114,6 +119,7 @@ class _MobileAnnotationSheetState extends State<MobileAnnotationSheet> {
                     IconButton(
                       onPressed: () {
                         c.selectAnnotation(ordered[(idx + 1) % ordered.length].id);
+                        c.notifyTutorialAction(TutorialActionId.selectAnnotation);
                         setState(() => _aiPreviewText = null);
                       },
                       icon: Icon(LucideIcons.chevronRight, size: 16, color: t.textSecondary),
@@ -148,9 +154,15 @@ class _MobileAnnotationSheetState extends State<MobileAnnotationSheet> {
               else
                 Flexible(
                   child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: () {
+                        c.selectAnnotation(current.id);
+                        c.notifyTutorialAction(TutorialActionId.selectAnnotation);
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                         Row(
                           children: [
                             Container(
@@ -326,6 +338,7 @@ class _MobileAnnotationSheetState extends State<MobileAnnotationSheet> {
                           ],
                         ),
                       ],
+                    ),
                     ),
                   ),
                 ),

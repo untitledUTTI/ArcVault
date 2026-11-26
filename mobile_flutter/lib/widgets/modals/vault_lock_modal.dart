@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../core/tutorial_flow.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
 import '../../theme/liquid_glass_surface.dart';
 
 class VaultLockModal extends StatefulWidget {
-  const VaultLockModal({super.key, required this.controller});
+  const VaultLockModal({super.key, required this.controller, this.onClose});
   final AppController controller;
+  final VoidCallback? onClose;
 
   @override
   State<VaultLockModal> createState() => _VaultLockModalState();
@@ -31,6 +33,7 @@ class _VaultLockModalState extends State<VaultLockModal> {
     final unlocked = c.vaultUnlocked;
 
     return ArcLiquidGlassSurface(
+      key: c.tourTargets.keyFor(TutorialTargetId.vaultLockModal),
       liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       padding: const EdgeInsets.all(18),
@@ -48,7 +51,9 @@ class _VaultLockModalState extends State<VaultLockModal> {
                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: t.textPrimary),
                 ),
               ),
-              IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(LucideIcons.x, size: 18)),
+              IconButton(
+                  onPressed: () => (widget.onClose ?? () => Navigator.of(context).pop())(),
+                  icon: const Icon(LucideIcons.x, size: 18)),
             ],
           ),
           const SizedBox(height: 8),
@@ -82,7 +87,9 @@ class _VaultLockModalState extends State<VaultLockModal> {
                       );
                       if (ok && context.mounted) {
                         await c.unlockVaultByBiometrics();
-                        if (context.mounted) Navigator.of(context).pop();
+                        if (context.mounted) {
+                          (widget.onClose ?? () => Navigator.of(context).pop())();
+                        }
                       }
                     } catch (_) {
                       setState(() => _error = isZh ? '生物识别不可用，请使用主密码' : 'Biometric unavailable');
@@ -97,11 +104,13 @@ class _VaultLockModalState extends State<VaultLockModal> {
                   final pass = _passCtrl.text;
                   if (unlocked) {
                     await c.lockVaultWithPasscode(pass);
-                    if (context.mounted) Navigator.of(context).pop();
+                    if (context.mounted) {
+                      (widget.onClose ?? () => Navigator.of(context).pop())();
+                    }
                   } else {
                     final ok = await c.unlockVaultWithPasscode(pass);
                     if (ok && context.mounted) {
-                      Navigator.of(context).pop();
+                      (widget.onClose ?? () => Navigator.of(context).pop())();
                     } else {
                       setState(() => _error = isZh ? '密码错误' : 'Invalid passcode');
                     }

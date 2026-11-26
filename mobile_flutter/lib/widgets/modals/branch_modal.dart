@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../core/tutorial_flow.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
 import '../../theme/liquid_glass_surface.dart';
 
 class BranchModal extends StatefulWidget {
-  const BranchModal({super.key, required this.controller});
+  const BranchModal({super.key, required this.controller, this.onClose});
   final AppController controller;
+  final VoidCallback? onClose;
 
   @override
   State<BranchModal> createState() => _BranchModalState();
@@ -30,6 +32,7 @@ class _BranchModalState extends State<BranchModal> {
     final branches = doc != null ? c.branchesForDoc(doc.id) : const [];
 
     return ArcLiquidGlassSurface(
+      key: c.tourTargets.keyFor(TutorialTargetId.branchModal),
       liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       padding: const EdgeInsets.all(16),
@@ -44,7 +47,9 @@ class _BranchModalState extends State<BranchModal> {
                 child: Text(isZh ? 'A/B 平行写作分支' : 'A/B Parallel Branches',
                     style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: t.textPrimary)),
               ),
-              IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(LucideIcons.x, size: 18)),
+              IconButton(
+                  onPressed: () => (widget.onClose ?? () => Navigator.of(context).pop())(),
+                  icon: const Icon(LucideIcons.x, size: 18)),
             ],
           ),
           const SizedBox(height: 10),
@@ -79,7 +84,7 @@ class _BranchModalState extends State<BranchModal> {
               child: InkWell(
                 onTap: () {
                   c.switchBranch(b.id);
-                  Navigator.of(context).pop();
+                  (widget.onClose ?? () => Navigator.of(context).pop())();
                 },
                 child: ArcFrostedCardSurface(
                   isActive: active,

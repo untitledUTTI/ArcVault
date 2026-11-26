@@ -2,13 +2,15 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/ooxml_engine.dart';
+import '../../core/tutorial_flow.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
 import '../../theme/liquid_glass_surface.dart';
 
 class CoverSplitModal extends StatefulWidget {
-  const CoverSplitModal({super.key, required this.controller});
+  const CoverSplitModal({super.key, required this.controller, this.onClose});
   final AppController controller;
+  final VoidCallback? onClose;
 
   @override
   State<CoverSplitModal> createState() => _CoverSplitModalState();
@@ -28,6 +30,14 @@ class _CoverSplitModalState extends State<CoverSplitModal> {
     _remember = doc.coverRule.remember;
   }
 
+  void _close() {
+    if (widget.onClose != null) {
+      widget.onClose!();
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = context.arcTheme;
@@ -38,7 +48,7 @@ class _CoverSplitModalState extends State<CoverSplitModal> {
       liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       child: SizedBox(
-        height: MediaQuery.sizeOf(context).height * 0.82,
+        height: MediaQuery.sizeOf(context).height * 0.78,
         child: Column(
           children: [
             Padding(
@@ -54,13 +64,17 @@ class _CoverSplitModalState extends State<CoverSplitModal> {
                     ),
                   ),
                   IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () {
+                      _close();
+                      c.notifyTutorialAction(TutorialActionId.coverCancel);
+                    },
                     icon: Icon(LucideIcons.x, size: 18, color: t.textSecondary),
                   ),
                 ],
               ),
             ),
             Expanded(
+              key: c.tourTargets.keyFor(TutorialTargetId.coverSplitBody),
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 itemCount: _bundle.blocks.length,
@@ -116,6 +130,7 @@ class _CoverSplitModalState extends State<CoverSplitModal> {
               ),
             ),
             Padding(
+              key: c.tourTargets.keyFor(TutorialTargetId.coverSplitFooter),
               padding: const EdgeInsets.fromLTRB(14, 6, 14, 14),
               child: Column(
                 children: [
@@ -133,25 +148,49 @@ class _CoverSplitModalState extends State<CoverSplitModal> {
                         child: OutlinedButton(
                           onPressed: () {
                             c.applyCoverSplit(0, _remember);
-                            Navigator.of(context).pop();
+                            _close();
+                            c.notifyTutorialAction(TutorialActionId.coverImportAll);
                           },
-                          child: Text(isZh ? '不剥离(全部导入)' : 'Import All', style: const TextStyle(fontSize: 11.5)),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                          ),
+                          child: Text(
+                            isZh ? '不剥离(全部导入)' : 'Import All',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 11),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 6),
                       OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text(isZh ? '取消' : 'Cancel', style: const TextStyle(fontSize: 11.5)),
+                        onPressed: () {
+                          _close();
+                          c.notifyTutorialAction(TutorialActionId.coverCancel);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        ),
+                        child: Text(isZh ? '取消' : 'Cancel', style: const TextStyle(fontSize: 11)),
                       ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: FilledButton(
+                          key: c.tourTargets.keyFor(TutorialTargetId.coverConfirmBtn),
                           onPressed: () {
                             c.applyCoverSplit(_coverEndIndex, _remember);
-                            Navigator.of(context).pop();
+                            _close();
+                            c.notifyTutorialAction(TutorialActionId.coverConfirm);
                           },
-                          style: FilledButton.styleFrom(backgroundColor: t.accent, foregroundColor: t.accentText),
-                          child: Text(isZh ? '确认切分提取' : 'Confirm Split', style: const TextStyle(fontSize: 11.5)),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: t.accent,
+                            foregroundColor: t.accentText,
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                          ),
+                          child: Text(
+                            isZh ? '确认切分并提取正文' : 'Confirm Split',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 11),
+                          ),
                         ),
                       ),
                     ],

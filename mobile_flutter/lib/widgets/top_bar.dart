@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../core/device_layout.dart';
+import '../core/tutorial_flow.dart';
 import '../i18n/dictionaries.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
@@ -94,18 +95,41 @@ class TopBar extends StatelessWidget {
           ),
 
           if (!layout.isCompact) ...[
-            _TopPillButton(
-              icon: controller.splitPreview ? LucideIcons.eyeOff : LucideIcons.eye,
-              label: controller.splitPreview ? d.edit : d.preview,
-              active: controller.splitPreview,
-              onTap: controller.toggleSplitPreview,
+            Row(
+              key: controller.tourTargets.keyFor(TutorialTargetId.topbarFormatGroup),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (doc != null) ...[
+                  _TopPillButton(
+                    icon: LucideIcons.arrowLeftRight,
+                    label: doc.activeFormat == EditorFormat.markdown ? 'MD' : 'LaTeX',
+                    onTap: controller.toggleActiveFormat,
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                _TopPillButton(
+                  icon: controller.splitPreview ? LucideIcons.eyeOff : LucideIcons.eye,
+                  label: controller.splitPreview ? d.edit : d.preview,
+                  active: controller.splitPreview,
+                  onTap: () {
+                    controller.toggleSplitPreview();
+                    controller.notifyTutorialAction(TutorialActionId.togglePreview);
+                  },
+                ),
+              ],
             ),
             const SizedBox(width: 6),
-            _TopPillButton(
-              icon: LucideIcons.bookmarkPlus,
-              label: d.snapshotShort,
-              primary: true,
-              onTap: () => controller.saveMilestoneSnapshot(),
+            KeyedSubtree(
+              key: controller.tourTargets.keyFor(TutorialTargetId.topbarSnapshotBtn),
+              child: _TopPillButton(
+                icon: LucideIcons.bookmarkPlus,
+                label: d.snapshotShort,
+                primary: true,
+                onTap: () {
+                  controller.saveMilestoneSnapshot();
+                  controller.notifyTutorialAction(TutorialActionId.saveSnapshot);
+                },
+              ),
             ),
             const SizedBox(width: 6),
           ],
@@ -153,7 +177,9 @@ class TopBar extends StatelessWidget {
             onTap: onOpenSettings,
           ),
 
-          PopupMenuButton<String>(
+          KeyedSubtree(
+            key: controller.tourTargets.keyFor(TutorialTargetId.topbarMoreBtn),
+            child: PopupMenuButton<String>(
             icon: Icon(LucideIcons.ellipsis, size: 18, color: t.textPrimary),
             color: t.bgElevated,
             onSelected: (value) {
@@ -219,6 +245,7 @@ class TopBar extends StatelessWidget {
               PopupMenuItem(value: 'locale', child: _MenuRow(LucideIcons.languages, d.switchLanguage)),
               PopupMenuItem(value: 'tutorial', child: _MenuRow(LucideIcons.bookOpen, d.tutorialShort)),
             ],
+            ),
           ),
         ],
       ),

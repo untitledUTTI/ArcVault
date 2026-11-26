@@ -5,7 +5,7 @@ import 'package:arcvault_mobile/models/archive_models.dart';
 import 'package:arcvault_mobile/theme/arc_theme.dart';
 
 void main() {
-  group('Mobile Themes & Tutorial Flow', () {
+  group('Mobile Themes & Live Spotlight Tutorial Flow', () {
     test('maps deprecated desktop themes to liquid-glass and keeps 5 mobile themes', () {
       expect(TutorialFlow.mobileWelcomeThemes.length, 5);
       expect(MobileThemeId.fromWire('celestial-optics'), MobileThemeId.liquidGlass);
@@ -43,10 +43,207 @@ void main() {
       expect(darkGlass.systemUiOverlayStyle.statusBarIconBrightness, Brightness.light);
     });
 
-    test('first-run warning gate requires 0s countdown and exact phrase', () {
+    test('initial phase and Android permissions gating align with desktop', () {
+      expect(TutorialFlow.getInitialPhase(TutorialMode.firstRun), TutorialPhase.welcome);
+      expect(TutorialFlow.getInitialPhase(TutorialMode.replay), TutorialPhase.picker);
+
+      expect(
+        TutorialFlow.shouldShowMobilePermissionsStep(
+          mode: TutorialMode.firstRun,
+          isAndroid: true,
+        ),
+        true,
+      );
+      expect(
+        TutorialFlow.shouldShowMobilePermissionsStep(
+          mode: TutorialMode.firstRun,
+          isAndroid: false,
+        ),
+        false,
+      );
+      expect(
+        TutorialFlow.shouldShowMobilePermissionsStep(
+          mode: TutorialMode.replay,
+          isAndroid: true,
+        ),
+        false,
+      );
+    });
+
+    test('includes all 8 modules with Cover Split 2-step flow and Workspace Trash gates', () {
+      expect(
+        TutorialFlow.modules.map((m) => m.id).toList(),
+        [
+          TutorialModuleId.workspace,
+          TutorialModuleId.wordAnnotations,
+          TutorialModuleId.versionDome,
+          TutorialModuleId.academicAi,
+          TutorialModuleId.syncSecurity,
+          TutorialModuleId.themesMultidevice,
+          TutorialModuleId.formatMatrix,
+          TutorialModuleId.limitations,
+        ],
+      );
+
+      final wsMod = TutorialFlow.moduleById(TutorialModuleId.workspace);
+      expect(
+        wsMod.steps.map((s) => s.id).toList(),
+        ['ws-spaces', 'ws-trash-btn', 'ws-trash-modal', 'ws-format'],
+      );
+      expect(wsMod.steps[1].actionGate?.actionId, TutorialActionId.openTrash);
+      expect(wsMod.steps[1].actionGate?.buttonLabel, '回收站');
+      expect(wsMod.steps[3].actionGate?.actionId, TutorialActionId.togglePreview);
+      expect(wsMod.steps[3].actionGate?.buttonLabel, '预览');
+
+      final wordMod = TutorialFlow.moduleById(TutorialModuleId.wordAnnotations);
+      expect(wordMod.steps[0].id, 'cover-pick-line');
+      expect(wordMod.steps[0].scene, TutorialSceneId.coverSplit);
+      expect(wordMod.steps[0].targetIds, [TutorialTargetId.coverSplitBody]);
+      expect(wordMod.steps[0].actionGate, isNull);
+
+      expect(wordMod.steps[1].id, 'cover-footer-btns');
+      expect(wordMod.steps[1].scene, TutorialSceneId.coverSplit);
+      expect(wordMod.steps[1].targetIds, [TutorialTargetId.coverSplitFooter]);
+      expect(wordMod.steps[1].actionGate?.actionId, TutorialActionId.coverConfirm);
+      expect(wordMod.steps[1].actionGate?.buttonLabel, '确认切分并提取正文');
+      expect(
+        wordMod.steps[1].actionGate?.fallbackActionIds,
+        containsAll([TutorialActionId.coverCancel, TutorialActionId.coverImportAll]),
+      );
+    });
+
+    test('first-run flow ends with cache-setup and warning at the very end; replay excludes both', () {
+      final totalSpotlight = TutorialFlow.modules.fold<int>(
+        0,
+        (acc, m) => acc + m.steps.length,
+      );
+      final firstRunFlow = TutorialFlow.buildFlow(TutorialMode.firstRun);
+      expect(firstRunFlow.length, totalSpotlight + 2);
+      expect(firstRunFlow[firstRunFlow.length - 2].kind, TutorialFlowStepKind.cacheSetup);
+      expect(firstRunFlow[firstRunFlow.length - 1].kind, TutorialFlowStepKind.warning);
+
+      final replayPartial = TutorialFlow.buildFlow(
+        TutorialMode.replay,
+        selectedModules: {TutorialModuleId.limitations, TutorialModuleId.formatMatrix},
+      );
+      expect(replayPartial.length, 2);
+      expect(replayPartial.every((s) => s.kind == TutorialFlowStepKind.spotlight), true);
+      expect(
+        replayPartial.map((s) => s.module!.id).toList(),
+        [TutorialModuleId.formatMatrix, TutorialModuleId.limitations],
+      );
+    });
+
+    test('formats action-gate disabled Next button copy accurately', () {
+      final flow = TutorialFlow.buildFlow(TutorialMode.firstRun);
+      expect(TutorialFlow.getStepAdvanceRelation(flow, 0), TutorialAdvanceRelation.nextStep);
+      expect(TutorialFlow.getStepAdvanceRelation(flow, 3), TutorialAdvanceRelation.nextModule);
+      expect(
+        TutorialFlow.getStepAdvanceRelation(flow, flow.length - 3),
+        TutorialAdvanceRelation.cacheSetup,
+      );
+      expect(
+        TutorialFlow.getStepAdvanceRelation(flow, flow.length - 2),
+        TutorialAdvanceRelation.warning,
+      );
+
+      final replayFlow = TutorialFlow.buildFlow(
+        TutorialMode.replay,
+        selectedModules: {TutorialModuleId.workspace},
+      );
+      expect(
+        TutorialFlow.getStepAdvanceRelation(replayFlow, replayFlow.length - 1),
+        TutorialAdvanceRelation.finish,
+      );
+
+      expect(
+        TutorialFlow.formatActionGateButtonText(
+          '确认切分并提取正文',
+          TutorialAdvanceRelation.nextStep,
+        ),
+        '点击「确认切分并提取正文」按钮进入下一步',
+      );
+      expect(
+        TutorialFlow.formatActionGateButtonText('预览', TutorialAdvanceRelation.nextModule),
+        '点击「预览」按钮进入下一板块',
+      );
+      expect(
+        TutorialFlow.formatActionGateButtonText('确认', TutorialAdvanceRelation.cacheSetup),
+        '点击「确认」按钮设置缓存目录',
+      );
+      expect(
+        TutorialFlow.formatActionGateButtonText('确认', TutorialAdvanceRelation.warning),
+        '点击「确认」按钮进入必读警告',
+      );
+      expect(
+        TutorialFlow.formatActionGateButtonText('确认', TutorialAdvanceRelation.finish),
+        '点击「确认」按钮完成教程',
+      );
+    });
+
+    test('computes non-overlapping guide card placement over dark mask', () {
+      final centered = TutorialFlow.computeGuideCardPlacement(
+        containerWidth: 390,
+        containerHeight: 844,
+        cutout: null,
+        cardWidth: 350,
+        cardHeight: 220,
+      );
+      expect(centered.placement, GuideCardPlacementKind.center);
+      expect(centered.left, 20);
+
+      final aboveFooter = TutorialFlow.computeGuideCardPlacement(
+        containerWidth: 390,
+        containerHeight: 844,
+        cutout: const SpotlightRect(top: 640, left: 10, width: 370, height: 100),
+        cardWidth: 350,
+        cardHeight: 220,
+        preferredPlacement: SpotlightPlacement.top,
+      );
+      expect(aboveFooter.placement, GuideCardPlacementKind.top);
+      expect(aboveFooter.top + 220, lessThanOrEqualTo(640));
+
+      final forcedBottom = TutorialFlow.computeGuideCardPlacement(
+        containerWidth: 390,
+        containerHeight: 844,
+        cutout: const SpotlightRect(top: 44, left: 8, width: 374, height: 740),
+        cardWidth: 350,
+        cardHeight: 220,
+        forcePlacementBottom: true,
+        margin: 10,
+      );
+      expect(forcedBottom.placement, GuideCardPlacementKind.bottom);
+      expect(forcedBottom.top, 844 - 220 - 10);
+
+      final aboveBottomSheet = TutorialFlow.computeGuideCardPlacement(
+        containerWidth: 390,
+        containerHeight: 667,
+        cutout: const SpotlightRect(top: 280, left: 0, width: 390, height: 387),
+        cardWidth: 350,
+        cardHeight: 320,
+        preferredPlacement: SpotlightPlacement.left,
+        margin: 10,
+        gap: 12,
+      );
+      expect(aboveBottomSheet.placement, GuideCardPlacementKind.top);
+      expect(aboveBottomSheet.top, 10);
+      expect(aboveBottomSheet.maxHeight, 280 - 10 - 12);
+    });
+
+    test('cache setup and first-run warning gate require explicit confirmation', () {
+      expect(TutorialFlow.canProceedFromCacheSetup(choice: null, customPath: ''), false);
+      expect(TutorialFlow.canProceedFromCacheSetup(choice: 'custom', customPath: '  '), false);
+      expect(
+        TutorialFlow.canProceedFromCacheSetup(choice: 'custom', customPath: '/sdcard/ArcVault'),
+        true,
+      );
+      expect(TutorialFlow.canProceedFromCacheSetup(choice: 'default', customPath: ''), true);
+
+      expect(TutorialFlow.canUnlockWarningInput(1), false);
+      expect(TutorialFlow.canUnlockWarningInput(0), true);
       expect(TutorialFlow.canConfirmWarning(remainingSeconds: 5, input: '我已了解'), false);
       expect(TutorialFlow.canConfirmWarning(remainingSeconds: 0, input: '了解'), false);
-      expect(TutorialFlow.canConfirmWarning(remainingSeconds: 0, input: '我已了解'), true);
+      expect(TutorialFlow.canConfirmWarning(remainingSeconds: 0, input: '  我已了解  '), true);
     });
   });
 }

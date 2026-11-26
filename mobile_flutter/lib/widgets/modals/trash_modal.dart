@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../core/tutorial_flow.dart';
 import '../../i18n/dictionaries.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
 import '../../theme/liquid_glass_surface.dart';
 
 class TrashModal extends StatefulWidget {
-  const TrashModal({super.key, required this.controller});
+  const TrashModal({super.key, required this.controller, this.onClose});
   final AppController controller;
+  final VoidCallback? onClose;
 
   @override
   State<TrashModal> createState() => _TrashModalState();
@@ -29,6 +31,7 @@ class _TrashModalState extends State<TrashModal> {
     }).toList();
 
     return ArcLiquidGlassSurface(
+      key: c.tourTargets.keyFor(TutorialTargetId.trashModal),
       liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       child: SizedBox(
@@ -53,7 +56,7 @@ class _TrashModalState extends State<TrashModal> {
                     ),
                   ),
                   IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () => (widget.onClose ?? () => Navigator.of(context).pop())(),
                     icon: Icon(LucideIcons.x, size: 18, color: t.textSecondary),
                   ),
                 ],
@@ -129,7 +132,7 @@ class _TrashModalState extends State<TrashModal> {
                                   FilledButton(
                                     onPressed: () {
                                       c.restoreFromTrash(doc.id);
-                                      Navigator.of(context).pop();
+                                      (widget.onClose ?? () => Navigator.of(context).pop())();
                                     },
                                     style: FilledButton.styleFrom(
                                       backgroundColor: t.accent,

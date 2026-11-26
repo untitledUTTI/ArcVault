@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../core/cas_store.dart';
+import '../core/tutorial_flow.dart';
 import '../i18n/dictionaries.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
@@ -60,7 +61,11 @@ class _TimelinePanelState extends State<TimelinePanel> {
                 ),
               ),
               OutlinedButton.icon(
-                onPressed: () => widget.onOpenDiff(null, null, openDarlingsTab: true),
+                key: c.tourTargets.keyFor(TutorialTargetId.timelineDarlingsBtn),
+                onPressed: () {
+                  widget.onOpenDiff(null, null, openDarlingsTab: true);
+                  c.notifyTutorialAction(TutorialActionId.openDarlings);
+                },
                 icon: const Icon(LucideIcons.skull, size: 13),
                 label: Text('${d.deletedDarlings} (${darlings.length})',
                     style: const TextStyle(fontSize: 11.5)),
@@ -246,6 +251,7 @@ class _TimelinePanelState extends State<TimelinePanel> {
 
     if (widget.isModalSheet) {
       return ArcLiquidGlassSurface(
+        key: c.tourTargets.keyFor(TutorialTargetId.timelinePanel),
         liquidGlassSettings: c.settings.liquidGlass,
         borderRadius: 24,
         child: body,
@@ -253,6 +259,7 @@ class _TimelinePanelState extends State<TimelinePanel> {
     }
 
     return Container(
+      key: c.tourTargets.keyFor(TutorialTargetId.timelinePanel),
       decoration: BoxDecoration(
         color: t.isLiquidGlass ? t.bgSurface.withValues(alpha: 0.55) : t.bgSurface,
         border: Border(top: BorderSide(color: t.borderSubtle)),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../core/tutorial_flow.dart';
 import '../i18n/dictionaries.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
@@ -370,9 +371,11 @@ class SidebarPanel extends StatelessWidget {
                 onTap: () {
                   onCloseDrawer?.call();
                   onOpenTrash();
+                  controller.notifyTutorialAction(TutorialActionId.openTrash);
                 },
                 borderRadius: BorderRadius.circular(10),
                 child: Container(
+                  key: controller.tourTargets.keyFor(TutorialTargetId.sidebarTrashBtn),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                   decoration: BoxDecoration(
                     color: t.bgSubtle.withValues(alpha: 0.55),
@@ -416,6 +419,7 @@ class SidebarPanel extends StatelessWidget {
 
     if (isDrawer) {
       return ArcLiquidGlassSurface(
+        key: controller.tourTargets.keyFor(TutorialTargetId.sidebarPanel),
         liquidGlassSettings: s.liquidGlass,
         borderRadius: 22,
         fallbackColor: t.bgSurface,
@@ -424,6 +428,7 @@ class SidebarPanel extends StatelessWidget {
     }
 
     return Container(
+      key: controller.tourTargets.keyFor(TutorialTargetId.sidebarPanel),
       decoration: BoxDecoration(
         color: t.isLiquidGlass ? t.bgSurface.withValues(alpha: 0.55) : t.bgSurface,
         border: Border(right: BorderSide(color: t.borderSubtle)),

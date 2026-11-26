@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../core/phrasebank_data.dart';
+import '../core/tutorial_flow.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
 import '../theme/arc_theme.dart';
@@ -77,8 +78,9 @@ class _PhrasebankFloatingCapsuleState extends State<PhrasebankFloatingCapsule> {
 }
 
 class PhrasebankModalSheet extends StatefulWidget {
-  const PhrasebankModalSheet({super.key, required this.controller});
+  const PhrasebankModalSheet({super.key, required this.controller, this.onClose});
   final AppController controller;
+  final VoidCallback? onClose;
 
   @override
   State<PhrasebankModalSheet> createState() => _PhrasebankModalSheetState();
@@ -102,6 +104,7 @@ class _PhrasebankModalSheetState extends State<PhrasebankModalSheet> {
         : const ['Smart', 'Sections', 'Search', 'Placeholders', 'Favorites'];
 
     return ArcLiquidGlassSurface(
+      key: c.tourTargets.keyFor(TutorialTargetId.phrasebankModal),
       liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       child: SizedBox(
@@ -121,7 +124,7 @@ class _PhrasebankModalSheetState extends State<PhrasebankModalSheet> {
                     ),
                   ),
                   IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () => (widget.onClose ?? () => Navigator.of(context).pop())(),
                     icon: Icon(LucideIcons.x, size: 18, color: t.textSecondary),
                   ),
                 ],
@@ -299,14 +302,14 @@ class _PhrasebankModalSheetState extends State<PhrasebankModalSheet> {
                   TextButton(
                     onPressed: () {
                       widget.controller.insertSnippet(renderedEn);
-                      Navigator.of(context).pop();
+                      (widget.onClose ?? () => Navigator.of(context).pop())();
                     },
                     child: Text(isZh ? '插入英文' : 'Insert EN', style: const TextStyle(fontSize: 12)),
                   ),
                   TextButton(
                     onPressed: () {
                       widget.controller.insertSnippet(renderedZh);
-                      Navigator.of(context).pop();
+                      (widget.onClose ?? () => Navigator.of(context).pop())();
                     },
                     child: Text(isZh ? '插入中文' : 'Insert ZH', style: const TextStyle(fontSize: 12)),
                   ),

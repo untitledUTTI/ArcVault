@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/diff_engine.dart';
+import '../../core/tutorial_flow.dart';
 import '../../models/archive_models.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
@@ -13,12 +14,14 @@ class DiffViewerModal extends StatefulWidget {
     this.leftSnap,
     this.rightSnap,
     this.initialDarlingsTab = false,
+    this.onClose,
   });
 
   final AppController controller;
   final Snapshot? leftSnap;
   final Snapshot? rightSnap;
   final bool initialDarlingsTab;
+  final VoidCallback? onClose;
 
   @override
   State<DiffViewerModal> createState() => _DiffViewerModalState();
@@ -41,6 +44,7 @@ class _DiffViewerModalState extends State<DiffViewerModal> {
     final darlings = doc != null ? c.darlingsForDoc(doc.id) : const <DeletedDarling>[];
 
     return ArcLiquidGlassSurface(
+      key: c.tourTargets.keyFor(TutorialTargetId.diffModal),
       liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       child: SizedBox(
@@ -60,7 +64,7 @@ class _DiffViewerModalState extends State<DiffViewerModal> {
                     ),
                   ),
                   IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () => (widget.onClose ?? () => Navigator.of(context).pop())(),
                     icon: Icon(LucideIcons.x, size: 18, color: t.textSecondary),
                   ),
                 ],
@@ -110,7 +114,7 @@ class _DiffViewerModalState extends State<DiffViewerModal> {
                                 child: TextButton.icon(
                                   onPressed: () {
                                     c.insertSnippet('\n${dl.text}');
-                                    Navigator.of(context).pop();
+                                    (widget.onClose ?? () => Navigator.of(context).pop())();
                                   },
                                   icon: const Icon(LucideIcons.undo2, size: 14),
                                   label: Text(isZh ? '捞回正文' : 'Restore to Draft'),

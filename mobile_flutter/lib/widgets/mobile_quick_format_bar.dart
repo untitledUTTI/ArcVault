@@ -7,6 +7,9 @@ import '../theme/liquid_glass_surface.dart';
 class MobileQuickFormatBar extends StatelessWidget {
   const MobileQuickFormatBar({
     super.key,
+    this.barKey,
+    this.snapshotBtnKey,
+    this.scrollController,
     required this.isZh,
     required this.readOnly,
     required this.activeFormat,
@@ -28,6 +31,9 @@ class MobileQuickFormatBar extends StatelessWidget {
     required this.onHaptic,
   });
 
+  final GlobalKey? barKey;
+  final GlobalKey? snapshotBtnKey;
+  final ScrollController? scrollController;
   final bool isZh;
   final bool readOnly;
   final EditorFormat activeFormat;
@@ -55,10 +61,12 @@ class MobileQuickFormatBar extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
       child: ArcLiquidGlassSurface(
+        key: barKey,
         liquidGlassSettings: liquidGlassSettings,
         borderRadius: 24,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         child: SingleChildScrollView(
+          controller: scrollController,
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
@@ -167,14 +175,17 @@ class MobileQuickFormatBar extends StatelessWidget {
                 },
               ),
               const SizedBox(width: 6),
-              _PillBtn(
-                icon: LucideIcons.bookmarkPlus,
-                label: isZh ? '快照' : 'Snap',
-                primary: true,
-                onTap: () {
-                  onHaptic(HapticPattern.success);
-                  onSaveMilestone();
-                },
+              KeyedSubtree(
+                key: snapshotBtnKey,
+                child: _PillBtn(
+                  icon: LucideIcons.bookmarkPlus,
+                  label: isZh ? '快照' : 'Snap',
+                  primary: true,
+                  onTap: () {
+                    onHaptic(HapticPattern.success);
+                    onSaveMilestone();
+                  },
+                ),
               ),
             ],
           ),
