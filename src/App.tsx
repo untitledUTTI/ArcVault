@@ -117,10 +117,22 @@ import { buildSamplePaperDocx } from './core/ooxml/sampleDocxBuilder';
 import { DEFAULT_SPACES, seedInitialWorkspace } from './core/demoSeed';
 import {
   nativeGetRuntimeInfo,
+  nativeLoadWorkspaceBackup,
+  nativeOpenBackupFolder,
+  nativeOpenVaultFolder,
+  nativePickVaultDirectory,
+  nativeSaveWorkspaceBackup,
+  nativeSetCustomVaultDir,
   nativeStartWatchFolder,
   nativeStopWatchFolder,
   triggerBrowserDownload,
 } from './platform/bridge';
+import {
+  loadWorkspaceFromIndexedDb,
+  parseWorkspaceState,
+  saveWorkspaceToIndexedDb,
+  serializeWorkspaceState,
+} from './core/workspaceBackup';
 import { createHlc, tickHlc } from './core/sync/hlc';
 import {
   DEFAULT_SYNC_SETTINGS,
@@ -318,7 +330,10 @@ export function App() {
     isTauri: false,
     platform: 'Web Preview (Vite)',
     vaultDir: 'Local Storage',
+    backupDir: 'Browser IndexedDB (自动草稿与定时快照)',
   });
+  const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
+  const workspaceHydratedRef = useRef(false);
 
   const weatherCfg = settings.weather ?? DEFAULT_WEATHER;
   const activeWeatherVisual = useMemo(() => {
@@ -556,15 +571,49 @@ export function App() {
     return () => window.clearInterval(timer);
   }, [settings.theme, weatherCfg.adaptColorByTime, activeWeatherVisual.timeOfDay]);
 
-  // Initialize demo workspace, runtime info & URL share intent
+  // Initialize workspace (restore from crash-safe local backup first, fallback to demo seed), runtime info & URL share intent
   useEffect(() => {
+    let cancelled = false;
     const sharePayload = parseShareFromLocationSearch(window.location.search);
     if (sharePayload) {
       setShareIntakePayload(sharePayload);
       setShareModalOpen(true);
     }
     nativeGetRuntimeInfo().then(setRuntimeInfo).catch(() => {});
-    seedInitialWorkspace().then((seed) => {
+
+    (async () => {
+      const nativeRaw = await nativeLoadWorkspaceBackup();
+      const raw = nativeRaw ?? (await loadWorkspaceFromIndexedDb());
+      const restored = parseWorkspaceState(raw);
+      if (!cancelled && restored && restored.documents.length > 0) {
+        casRef.current = new CasObjectStore(restored.casObjects);
+        setDocuments(restored.documents);
+        setBranches(restored.branches);
+        setSnapshots(restored.snapshots);
+        setDarlings(restored.darlings);
+        setMotivations(restored.motivations);
+        setLinkedAssets(restored.linkedAssets);
+        setWritingActivity(restored.writingActivity);
+        setLastBackupAt(restored.savedAt);
+        const preferredDoc = initialLayout.activeDocId
+          ? restored.documents.find((d) => d.id === initialLayout.activeDocId)
+          : undefined;
+        const targetDoc =
+          preferredDoc ??
+          restored.documents.find((d) => d.id === restored.activeDocId) ??
+          restored.documents[0];
+        if (targetDoc) {
+          setActiveDocId(targetDoc.id);
+          setActiveSpaceId(targetDoc.spaceId);
+        } else {
+          setActiveSpaceId(restored.activeSpaceId);
+        }
+        workspaceHydratedRef.current = true;
+        return;
+      }
+
+      const seed = await seedInitialWorkspace();
+      if (cancelled) return;
       casRef.current = seed.cas;
       parsedBundlesRef.current = seed.parsedBundles;
       setDocuments(seed.documents);
@@ -583,8 +632,148 @@ export function App() {
       } else {
         setActiveDocId(seed.documents[0]?.id ?? null);
       }
-    });
+      workspaceHydratedRef.current = true;
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [initialLayout.activeDocId]);
+
+  const buildBackupPayload = useCallback(
+    () =>
+      serializeWorkspaceState({
+        activeSpaceId,
+        activeDocId,
+        documents,
+        branches,
+        snapshots,
+        darlings,
+        motivations,
+        linkedAssets,
+        writingActivity,
+        casObjects: casRef.current.exportAll(),
+      }),
+    [
+      activeSpaceId,
+      activeDocId,
+      documents,
+      branches,
+      snapshots,
+      darlings,
+      motivations,
+      linkedAssets,
+      writingActivity,
+    ],
+  );
+
+  const persistWorkspaceBackup = useCallback(
+    async (scheduled: boolean): Promise<string | null> => {
+      if (!workspaceHydratedRef.current || documents.length === 0) return null;
+      const payload = buildBackupPayload();
+      await saveWorkspaceToIndexedDb(payload);
+      const nativePath = await nativeSaveWorkspaceBackup(payload, scheduled);
+      if (scheduled) {
+        setLastBackupAt(new Date().toISOString());
+      }
+      return nativePath;
+    },
+    [buildBackupPayload, documents.length],
+  );
+
+  // Crash-safe debounced auto-save on workspace changes + flush on page unload
+  useEffect(() => {
+    if (!workspaceHydratedRef.current || documents.length === 0) return;
+    const timer = window.setTimeout(() => {
+      void persistWorkspaceBackup(false);
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [
+    documents,
+    branches,
+    snapshots,
+    darlings,
+    motivations,
+    linkedAssets,
+    writingActivity,
+    activeSpaceId,
+    activeDocId,
+    persistWorkspaceBackup,
+  ]);
+
+  useEffect(() => {
+    const flushNow = () => {
+      if (!workspaceHydratedRef.current || documents.length === 0) return;
+      void persistWorkspaceBackup(false);
+    };
+    window.addEventListener('beforeunload', flushNow);
+    window.addEventListener('pagehide', flushNow);
+    return () => {
+      window.removeEventListener('beforeunload', flushNow);
+      window.removeEventListener('pagehide', flushNow);
+    };
+  }, [documents.length, persistWorkspaceBackup]);
+
+  // Scheduled automatic backup into <vaultDir>/backups/
+  useEffect(() => {
+    const intervalMinutes = Math.max(1, settings.autoBackup?.debounceMinutes ?? 3);
+    const intervalMs = intervalMinutes * 60_000;
+    const timer = window.setInterval(() => {
+      void persistWorkspaceBackup(true);
+    }, intervalMs);
+    return () => window.clearInterval(timer);
+  }, [settings.autoBackup?.debounceMinutes, persistWorkspaceBackup]);
+
+  const handleOpenBackupFolder = useCallback(async () => {
+    const res = await nativeOpenBackupFolder();
+    if (res.ok) {
+      showToast(`已打开备份文件夹：${res.path}`);
+    } else if (!runtimeInfo.isTauri) {
+      const payload = buildBackupPayload();
+      triggerBrowserDownload(
+        `arcvault-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`,
+        payload,
+        'application/json',
+      );
+      showToast('Web 端无本地文件夹权限，已为你导出当前完整备份文件');
+    } else {
+      showToast(`打开备份文件夹失败：${res.message ?? '未知错误'}`);
+    }
+  }, [buildBackupPayload, runtimeInfo.isTauri, showToast]);
+
+  const handleRunManualBackup = useCallback(async () => {
+    const nativePath = await persistWorkspaceBackup(true);
+    if (nativePath) {
+      showToast(`已完成备份：${nativePath}`);
+    } else {
+      showToast('已更新本地 IndexedDB 自动备份');
+    }
+  }, [persistWorkspaceBackup, showToast]);
+
+  const handleOpenVaultFolder = useCallback(async () => {
+    const res = await nativeOpenVaultFolder();
+    if (res.ok) {
+      showToast(`已打开缓存目录：${res.path}`);
+    } else if (!runtimeInfo.isTauri) {
+      showToast(`当前缓存位置：${runtimeInfo.vaultDir}（Web 预览模式无法打开系统文件夹）`);
+    } else {
+      showToast(`当前缓存目录：${runtimeInfo.vaultDir}`);
+    }
+  }, [runtimeInfo.isTauri, runtimeInfo.vaultDir, showToast]);
+
+  const handlePickVaultDirectory = useCallback(async () => {
+    return nativePickVaultDirectory();
+  }, []);
+
+  const handleSetCustomVaultDir = useCallback(
+    async (path: string) => {
+      const nextInfo = await nativeSetCustomVaultDir(path);
+      setRuntimeInfo(nextInfo);
+      await persistWorkspaceBackup(true);
+      showToast(`已切换缓存与备份目录至：${nextInfo.vaultDir}`);
+    },
+    [persistWorkspaceBackup, showToast],
+  );
 
   // Apply theme, custom colors, typography CSS variables & persist settings
   useEffect(() => {
@@ -2511,6 +2700,12 @@ export function App() {
         <SettingsModal
           settings={settings}
           runtimeInfo={runtimeInfo}
+          lastBackupAt={lastBackupAt}
+          onOpenBackupFolder={handleOpenBackupFolder}
+          onOpenVaultFolder={handleOpenVaultFolder}
+          onPickVaultDirectory={handlePickVaultDirectory}
+          onSetCustomVaultDir={handleSetCustomVaultDir}
+          onRunManualBackup={handleRunManualBackup}
           initialTab={settingsInitialTab}
           deviceEnv={deviceEnv}
           onOpenSync={() => setSyncModalOpen(true)}
@@ -2829,6 +3024,9 @@ export function App() {
           theme={settings.theme}
           locale={settings.locale}
           readyToStart={documents.length > 0}
+          runtimeInfo={runtimeInfo}
+          onPickVaultDirectory={handlePickVaultDirectory}
+          onSetCustomVaultDir={handleSetCustomVaultDir}
           onSelectTheme={(nextTheme) => setSettings((s) => ({ ...s, theme: nextTheme }))}
           onToggleLocale={() =>
             setSettings((s) => ({ ...s, locale: s.locale === 'zh-CN' ? 'en-US' : 'zh-CN' }))

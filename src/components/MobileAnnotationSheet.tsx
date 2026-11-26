@@ -226,6 +226,7 @@ export const MobileAnnotationSheet: React.FC<MobileAnnotationSheetProps> = ({
                   <button
                     key={ann.id}
                     type="button"
+                    data-tour="annotation-card"
                     className={`arc-mobile-ann-row ${active ? 'is-active' : ''}`}
                     onClick={() => {
                       onHaptic('light');
@@ -257,7 +258,7 @@ export const MobileAnnotationSheet: React.FC<MobileAnnotationSheetProps> = ({
               })}
             </div>
           ) : current ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div data-tour="annotation-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {/* Card Navigation Bar */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

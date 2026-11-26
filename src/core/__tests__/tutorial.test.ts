@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MOBILE_PERMISSION_CARDS,
   TUTORIAL_CONFIRM_PHRASE,
   TUTORIAL_MODULES,
   TUTORIAL_WARNING_COUNTDOWN_SECONDS,
   TUTORIAL_WARNING_TEXT,
+  areAllMobilePermissionsGranted,
   buildTutorialFlow,
   canConfirmWarning,
+  canProceedFromCacheSetup,
   canUnlockWarningInput,
   computeGuideCardPlacement,
   formatActionGateButtonText,
@@ -13,6 +16,7 @@ import {
   getStepAdvanceRelation,
   hasCompletedOnboarding,
   markOnboardingCompleted,
+  shouldShowMobilePermissionsStep,
   type StorageLike,
 } from '../tutorial';
 
@@ -101,15 +105,16 @@ describe('Live In-App Spotlight Tutorial & First-Run Warning Gate', () => {
     expect(wordMod.steps[1].actionGate?.triggerSelector).toBe('[data-tour="cover-confirm-btn"]');
   });
 
-  it('builds flattened first-run flow ending with mandatory warning step', () => {
+  it('builds flattened first-run flow ending with cache-setup and mandatory warning step', () => {
     const totalModuleSteps = TUTORIAL_MODULES.reduce((acc, m) => acc + m.steps.length, 0);
     const flow = buildTutorialFlow('first-run');
-    expect(flow.length).toBe(totalModuleSteps + 1);
+    expect(flow.length).toBe(totalModuleSteps + 2);
+    expect(flow[flow.length - 2]).toEqual({ kind: 'cache-setup' });
     expect(flow[flow.length - 1]).toEqual({ kind: 'warning' });
-    expect(flow.slice(0, -1).every((s) => s.kind === 'step')).toBe(true);
+    expect(flow.slice(0, -2).every((s) => s.kind === 'step')).toBe(true);
   });
 
-  it('builds replay flow with selected modules only and never shows warning', () => {
+  it('builds replay flow with selected modules only and never shows cache-setup or warning', () => {
     const partial = buildTutorialFlow('replay', ['limitations', 'format-matrix']);
     expect(partial.length).toBe(2);
     expect(partial.every((s) => s.kind === 'step')).toBe(true);
@@ -120,7 +125,7 @@ describe('Live In-App Spotlight Tutorial & First-Run Warning Gate', () => {
     const fullReplay = buildTutorialFlow('replay');
     const totalModuleSteps = TUTORIAL_MODULES.reduce((acc, m) => acc + m.steps.length, 0);
     expect(fullReplay.length).toBe(totalModuleSteps);
-    expect(fullReplay.some((s) => s.kind === 'warning')).toBe(false);
+    expect(fullReplay.some((s) => s.kind === 'warning' || s.kind === 'cache-setup')).toBe(false);
   });
 
   it('formats action-gate disabled Next button copy accurately', () => {
@@ -129,7 +134,8 @@ describe('Live In-App Spotlight Tutorial & First-Run Warning Gate', () => {
     expect(getStepAdvanceRelation(flow, 0)).toBe('next-step');
     // Step 3 (ws-format) -> Step 4 (cover-pick-line) transitions to next module
     expect(getStepAdvanceRelation(flow, 3)).toBe('next-module');
-    // Second-to-last step -> warning
+    // Third-to-last step -> cache-setup; second-to-last -> warning
+    expect(getStepAdvanceRelation(flow, flow.length - 3)).toBe('cache-setup');
     expect(getStepAdvanceRelation(flow, flow.length - 2)).toBe('warning');
 
     const replayFlow = buildTutorialFlow('replay', ['workspace']);
@@ -140,6 +146,9 @@ describe('Live In-App Spotlight Tutorial & First-Run Warning Gate', () => {
     );
     expect(formatActionGateButtonText('预览', 'next-module')).toBe(
       '点击「预览」按钮进入下一板块',
+    );
+    expect(formatActionGateButtonText('确认', 'cache-setup')).toBe(
+      '点击「确认」按钮设置缓存目录',
     );
     expect(formatActionGateButtonText('确认', 'warning')).toBe(
       '点击「确认」按钮进入必读警告',
@@ -197,6 +206,50 @@ describe('Live In-App Spotlight Tutorial & First-Run Warning Gate', () => {
     expect(mobile.left).toBeGreaterThanOrEqual(10);
     expect(mobile.left + 350).toBeLessThanOrEqual(380);
     expect(mobile.top + 220).toBeLessThanOrEqual(832);
+
+    // Forced bottom placement on phone places card at bottom even when modal cutout fills screen
+    const forcedBottom = computeGuideCardPlacement({
+      containerWidth: 390,
+      containerHeight: 844,
+      cutout: { top: 44, left: 8, width: 374, height: 760 },
+      cardWidth: 350,
+      cardHeight: 220,
+      preferredPlacement: 'bottom',
+      forcePlacement: 'bottom',
+      margin: 10,
+    });
+    expect(forcedBottom.placement).toBe('bottom');
+    expect(forcedBottom.top).toBe(844 - 220 - 10);
+    expect(forcedBottom.left).toBe(20);
+
+    // Bottom sheet cutout on compact phone constrains top-placed card maxHeight so it never overlaps the sheet
+    const aboveBottomSheet = computeGuideCardPlacement({
+      containerWidth: 390,
+      containerHeight: 667,
+      cutout: { top: 280, left: 0, width: 390, height: 387 },
+      cardWidth: 350,
+      cardHeight: 320,
+      preferredPlacement: 'left',
+      margin: 10,
+      gap: 12,
+    });
+    expect(aboveBottomSheet.placement).toBe('top');
+    expect(aboveBottomSheet.top).toBe(10);
+    expect(aboveBottomSheet.maxHeight).toBe(280 - 10 - 12);
+  });
+
+  it('marks designated modal/workspace steps to force bottom placement on phone', () => {
+    const allSteps = TUTORIAL_MODULES.flatMap((m) => m.steps);
+    const forcedIds = allSteps.filter((s) => s.phoneForceBottom).map((s) => s.id);
+    expect(forcedIds).toEqual([
+      'ai-paper-studio',
+      'ai-context-assets',
+      'ai-evolution',
+      'sec-vault',
+      'sec-sync',
+      'settings-ai-device',
+      'fmt-office-live',
+    ]);
   });
 
   it('enforces 10-second reading countdown and exact confirmation phrase', () => {
@@ -214,5 +267,25 @@ describe('Live In-App Spotlight Tutorial & First-Run Warning Gate', () => {
     expect(canConfirmWarning(0, '')).toBe(false);
     expect(canConfirmWarning(0, '已了解')).toBe(false);
     expect(canConfirmWarning(0, '  我已了解  ')).toBe(true);
+  });
+
+  it('enforces mandatory cache directory selection before warning step', () => {
+    expect(canProceedFromCacheSetup(null, '')).toBe(false);
+    expect(canProceedFromCacheSetup('custom', '   ')).toBe(false);
+    expect(canProceedFromCacheSetup('custom', 'D:\\ArcVaultCache')).toBe(true);
+    expect(canProceedFromCacheSetup('default', '')).toBe(true);
+  });
+
+  it('shows mobile permissions screen only on Android first-run and skips iOS/iPadOS/desktop', () => {
+    expect(shouldShowMobilePermissionsStep('first-run', { os: 'android', isPhone: true, isTablet: false })).toBe(true);
+    expect(shouldShowMobilePermissionsStep('first-run', { os: 'android', isPhone: false, isTablet: true })).toBe(true);
+    expect(shouldShowMobilePermissionsStep('first-run', { os: 'ios', isPhone: true, isTablet: false })).toBe(false);
+    expect(shouldShowMobilePermissionsStep('first-run', { os: 'ipados', isPhone: false, isTablet: true })).toBe(false);
+    expect(shouldShowMobilePermissionsStep('first-run', { os: 'windows', isPhone: false, isTablet: false })).toBe(false);
+    expect(shouldShowMobilePermissionsStep('replay', { os: 'android', isPhone: true, isTablet: false })).toBe(false);
+
+    expect(areAllMobilePermissionsGranted([])).toBe(false);
+    expect(areAllMobilePermissionsGranted(['storage', 'camera'])).toBe(false);
+    expect(areAllMobilePermissionsGranted(MOBILE_PERMISSION_CARDS.map((c) => c.id))).toBe(true);
   });
 });

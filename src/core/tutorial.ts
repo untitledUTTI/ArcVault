@@ -16,10 +16,66 @@ export type TutorialModuleId =
 
 export type TutorialMode = 'first-run' | 'replay';
 
-export type TutorialPhase = 'welcome' | 'picker' | 'player';
+export type TutorialPhase = 'welcome' | 'permissions' | 'picker' | 'player';
 
 export function getInitialTutorialPhase(mode: TutorialMode): TutorialPhase {
   return mode === 'first-run' ? 'welcome' : 'picker';
+}
+
+export interface MobilePermissionCardDef {
+  id: 'storage' | 'camera' | 'local-network' | 'biometric';
+  title: string;
+  description: string;
+  actionLabel: string;
+  required: boolean;
+}
+
+export const MOBILE_PERMISSION_CARDS: MobilePermissionCardDef[] = [
+  {
+    id: 'storage',
+    title: '文件与存储访问权限',
+    description: '用于读写本地文档、自定义缓存目录、CAS 去重快照与定时备份。',
+    actionLabel: '前往授权',
+    required: true,
+  },
+  {
+    id: 'camera',
+    title: '相机权限',
+    description: '用于「纸质稿扫描导入」与局域网同步扫码配对。',
+    actionLabel: '点击授权',
+    required: false,
+  },
+  {
+    id: 'local-network',
+    title: '局域网 / 附近设备权限',
+    description: '用于同一 Wi-Fi 下与电脑端高速直连同步，零网盘流量消耗。',
+    actionLabel: '前往设置',
+    required: false,
+  },
+  {
+    id: 'biometric',
+    title: '生物识别（指纹 / 面容）',
+    description: '用于快速解锁「档案保险箱」中的加密私密文档。',
+    actionLabel: '点击验证',
+    required: false,
+  },
+];
+
+export function shouldShowMobilePermissionsStep(
+  mode: TutorialMode,
+  deviceEnv: { os?: string; isPhone?: boolean; isTablet?: boolean },
+): boolean {
+  if (mode !== 'first-run') return false;
+  if (deviceEnv.os !== 'android') return false;
+  return Boolean(deviceEnv.isPhone || deviceEnv.isTablet);
+}
+
+export function areAllMobilePermissionsGranted(
+  grantedIds: readonly string[],
+  cards: readonly MobilePermissionCardDef[] = MOBILE_PERMISSION_CARDS,
+): boolean {
+  const grantedSet = new Set(grantedIds);
+  return cards.every((c) => grantedSet.has(c.id));
 }
 
 export type TutorialSceneId =
@@ -69,6 +125,8 @@ export interface TutorialSpotlightStep {
   padding?: number;
   /** Preferred guide card placement relative to cutout */
   preferredPlacement?: 'auto' | 'top' | 'bottom' | 'left' | 'right';
+  /** When true, pin guide card to bottom of screen on phone viewports regardless of cutout space */
+  phoneForceBottom?: boolean;
   /** When set, the Next button is disabled and shows "点击「xxx」按钮进入下一步/下一板块"; clicking the real element auto-advances */
   actionGate?: TutorialActionGate;
 }
@@ -91,9 +149,15 @@ export type TutorialStep =
       stepIndexInModule: number;
       moduleStepCount: number;
     }
+  | { kind: 'cache-setup' }
   | { kind: 'warning' };
 
-export type TutorialAdvanceRelation = 'next-step' | 'next-module' | 'warning' | 'finish';
+export type TutorialAdvanceRelation =
+  | 'next-step'
+  | 'next-module'
+  | 'cache-setup'
+  | 'warning'
+  | 'finish';
 
 export interface SpotlightRect {
   top: number;
@@ -368,14 +432,14 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         moduleId: 'academic-ai',
         title: '切换文档级三档 AI 隐私锁',
         description:
-          '编辑器顶部栏集成了当前文档的隐私闸门、Skills 状态与学术句库开关。点击高亮的「AI 策略」按钮即可在「云端或本地 → 仅本地 Ollama → 完全禁用 AI」之间实时切换。请点击一次按钮试试：',
+          '编辑器顶部栏集成了当前文档的隐私闸门、Skills 状态与学术句库开关。点击高亮的「AI 隐私锁」按钮即可在「云端或本地 → 仅本地 Ollama → 完全禁用 AI」之间实时切换。请点击一次按钮试试：',
         scene: 'editor-ai-bar',
         targetSelectors: ['[data-tour="editor-ai-bar"]'],
         preferredPlacement: 'bottom',
         padding: 6,
         actionGate: {
           triggerSelector: '[data-tour="editor-ai-policy-btn"]',
-          buttonLabel: 'AI 策略',
+          buttonLabel: 'AI 隐私锁',
         },
       },
       {
@@ -399,6 +463,7 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         scene: 'paper-studio',
         targetSelectors: ['[data-tour="paper-studio-modal"]'],
         preferredPlacement: 'bottom',
+        phoneForceBottom: true,
         padding: 6,
       },
       {
@@ -410,6 +475,7 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         scene: 'context-assets',
         targetSelectors: ['[data-tour="context-assets-modal"]'],
         preferredPlacement: 'bottom',
+        phoneForceBottom: true,
         padding: 6,
       },
       {
@@ -421,6 +487,7 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         scene: 'evolution-studio',
         targetSelectors: ['[data-tour="evolution-studio-modal"]'],
         preferredPlacement: 'bottom',
+        phoneForceBottom: true,
         padding: 6,
       },
     ],
@@ -446,6 +513,7 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         scene: 'vault-lock',
         targetSelectors: ['[data-tour="vault-lock-modal"]'],
         preferredPlacement: 'bottom',
+        phoneForceBottom: true,
         padding: 6,
       },
       {
@@ -457,6 +525,7 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         scene: 'sync-modal',
         targetSelectors: ['[data-tour="sync-modal"]'],
         preferredPlacement: 'bottom',
+        phoneForceBottom: true,
         padding: 6,
       },
     ],
@@ -493,6 +562,7 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         scene: 'settings-ai',
         targetSelectors: ['[data-tour="settings-modal"]'],
         preferredPlacement: 'bottom',
+        phoneForceBottom: true,
         padding: 6,
       },
       {
@@ -542,6 +612,7 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         scene: 'format-office',
         targetSelectors: ['[data-tour="workspace-main"]'],
         preferredPlacement: 'bottom',
+        phoneForceBottom: true,
         padding: 4,
       },
     ],
@@ -635,6 +706,7 @@ export function buildTutorialFlow(
   }
 
   if (mode === 'first-run') {
+    steps.push({ kind: 'cache-setup' });
     steps.push({ kind: 'warning' });
   }
 
@@ -648,6 +720,7 @@ export function getStepAdvanceRelation(
   const cur = steps[stepIndex];
   const next = steps[stepIndex + 1];
   if (!next) return 'finish';
+  if (next.kind === 'cache-setup') return 'cache-setup';
   if (next.kind === 'warning') return 'warning';
   if (cur?.kind === 'step' && next.kind === 'step' && cur.module.id !== next.module.id) {
     return 'next-module';
@@ -662,6 +735,8 @@ export function formatActionGateButtonText(
   switch (relation) {
     case 'next-module':
       return `点击「${buttonLabel}」按钮进入下一板块`;
+    case 'cache-setup':
+      return `点击「${buttonLabel}」按钮设置缓存目录`;
     case 'warning':
       return `点击「${buttonLabel}」按钮进入必读警告`;
     case 'finish':
@@ -679,12 +754,14 @@ export function computeGuideCardPlacement(params: {
   cardWidth: number;
   cardHeight: number;
   preferredPlacement?: 'auto' | 'top' | 'bottom' | 'left' | 'right';
+  forcePlacement?: 'bottom';
   margin?: number;
   gap?: number;
 }): {
   top: number;
   left: number;
   placement: 'center' | 'top' | 'bottom' | 'left' | 'right';
+  maxHeight?: number;
 } {
   const {
     containerWidth,
@@ -693,6 +770,7 @@ export function computeGuideCardPlacement(params: {
     cardWidth,
     cardHeight,
     preferredPlacement = 'auto',
+    forcePlacement,
     margin = 12,
     gap = 12,
   } = params;
@@ -701,6 +779,17 @@ export function computeGuideCardPlacement(params: {
   const maxTop = Math.max(margin, containerHeight - cardHeight - margin);
   const clampLeft = (v: number) => Math.max(margin, Math.min(maxLeft, Math.round(v)));
   const clampTop = (v: number) => Math.max(margin, Math.min(maxTop, Math.round(v)));
+
+  if (forcePlacement === 'bottom') {
+    const centerLeft = cutout
+      ? cutout.left + cutout.width / 2 - cardWidth / 2
+      : (containerWidth - cardWidth) / 2;
+    return {
+      top: clampTop(containerHeight - cardHeight - margin),
+      left: clampLeft(centerLeft),
+      placement: 'bottom',
+    };
+  }
 
   if (!cutout) {
     return {
@@ -748,11 +837,13 @@ export function computeGuideCardPlacement(params: {
     };
   }
   if (chosen === 'top') {
+    const availableTop = cutout.top - margin - gap;
     const rawTop = fits.top ? cutout.top - cardHeight - gap : margin;
     return {
       top: clampTop(rawTop),
       left: clampLeft(cutout.left + cutout.width / 2 - cardWidth / 2),
       placement: 'top',
+      maxHeight: !fits.top && availableTop >= 150 ? availableTop : undefined,
     };
   }
   if (chosen === 'right') {
@@ -769,6 +860,15 @@ export function computeGuideCardPlacement(params: {
     left: clampLeft(rawLeft),
     placement: 'left',
   };
+}
+
+export function canProceedFromCacheSetup(
+  choice: 'default' | 'custom' | null,
+  customPath: string,
+): boolean {
+  if (choice === 'default') return true;
+  if (choice === 'custom') return customPath.trim().length > 0;
+  return false;
 }
 
 export function canUnlockWarningInput(remainingSeconds: number): boolean {

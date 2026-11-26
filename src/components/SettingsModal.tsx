@@ -8,6 +8,7 @@ import {
   Type,
   Palette,
   FolderCog,
+  FolderOpen,
   Info,
   Check,
   ShieldCheck,
@@ -128,7 +129,13 @@ type SettingsTab = 'appearance' | 'typography' | 'archive' | 'device' | 'ai' | '
 
 interface SettingsModalProps {
   settings: AppSettings;
-  runtimeInfo: { isTauri: boolean; platform: string; vaultDir: string };
+  runtimeInfo: { isTauri: boolean; platform: string; vaultDir: string; backupDir?: string };
+  lastBackupAt?: string | null;
+  onOpenBackupFolder?: () => void;
+  onOpenVaultFolder?: () => void;
+  onPickVaultDirectory?: () => Promise<string | null>;
+  onSetCustomVaultDir?: (path: string) => Promise<void>;
+  onRunManualBackup?: () => void;
   initialTab?: SettingsTab;
   deviceEnv?: DeviceEnvironment;
   onOpenSync?: () => void;
@@ -264,6 +271,12 @@ const ThemePreviewSwatch: React.FC<{ theme: ThemeCardItem }> = ({ theme }) => {
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
   runtimeInfo,
+  lastBackupAt,
+  onOpenBackupFolder,
+  onOpenVaultFolder,
+  onPickVaultDirectory,
+  onSetCustomVaultDir,
+  onRunManualBackup,
   initialTab = 'appearance',
   deviceEnv,
   onOpenSync,
@@ -577,6 +590,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       ),
     [monet],
   );
+
+  const [customVaultInput, setCustomVaultInput] = useState(runtimeInfo.vaultDir);
+  const [vaultSwitching, setVaultSwitching] = useState(false);
+
+  useEffect(() => {
+    setCustomVaultInput(runtimeInfo.vaultDir);
+  }, [runtimeInfo.vaultDir]);
+
+  const applyCustomVaultPath = async (rawPath: string) => {
+    const trimmed = rawPath.trim();
+    if (!trimmed || !onSetCustomVaultDir) return;
+    setVaultSwitching(true);
+    try {
+      await onSetCustomVaultDir(trimmed);
+      onHaptic?.('success');
+    } finally {
+      setVaultSwitching(false);
+    }
+  };
 
   const isZh = settings.locale === 'zh-CN';
   const navItems: Array<{ id: SettingsTab; label: string; icon: React.ReactNode }> = isZh
@@ -2174,6 +2206,124 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         />
                       </label>
                     </div>
+                    <div
+                      style={{
+                        marginTop: 12,
+                        padding: '10px 12px',
+                        borderRadius: 8,
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-subtle)',
+                        fontSize: 12,
+                        lineHeight: 1.7,
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      <div style={{ wordBreak: 'break-all' }}>
+                        {isZh ? '缓存与档案目录：' : 'Cache / Vault Directory: '}
+                        <strong style={{ color: 'var(--text-primary)' }}>{runtimeInfo.vaultDir}</strong>
+                      </div>
+                      <div style={{ wordBreak: 'break-all' }}>
+                        {isZh ? '自动定时备份文件夹：' : 'Auto-Backup Folder: '}
+                        <strong style={{ color: 'var(--text-primary)' }}>
+                          {runtimeInfo.backupDir ?? runtimeInfo.vaultDir}
+                        </strong>
+                      </div>
+                      <div>
+                        {isZh ? '最近备份时间：' : 'Last Backup: '}
+                        {lastBackupAt
+                          ? new Date(lastBackupAt).toLocaleString()
+                          : isZh
+                            ? '随编辑实时自动保存草稿'
+                            : 'Auto-saving drafts on edit'}
+                      </div>
+                      {onSetCustomVaultDir && (
+                        <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <input
+                            type="text"
+                            className="arc-input"
+                            style={{ flex: 1, minWidth: 160 }}
+                            value={customVaultInput}
+                            onChange={(e) => setCustomVaultInput(e.target.value)}
+                            placeholder={isZh ? '输入自定义缓存目录路径' : 'Custom cache directory path'}
+                          />
+                          {onPickVaultDirectory && (
+                            <button
+                              type="button"
+                              className="arc-btn"
+                              disabled={vaultSwitching}
+                              onClick={async () => {
+                                onHaptic?.('light');
+                                const picked = await onPickVaultDirectory();
+                                if (picked) {
+                                  setCustomVaultInput(picked);
+                                  await applyCustomVaultPath(picked);
+                                }
+                              }}
+                            >
+                              <FolderOpen size={13} />
+                              <span>{isZh ? '浏览…' : 'Browse…'}</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="arc-btn"
+                            disabled={vaultSwitching || !customVaultInput.trim()}
+                            onClick={() => void applyCustomVaultPath(customVaultInput)}
+                          >
+                            <span>{vaultSwitching ? (isZh ? '迁移中…' : 'Applying…') : (isZh ? '更改目录' : 'Apply')}</span>
+                          </button>
+                        </div>
+                      )}
+                      <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {onOpenVaultFolder && (
+                          <button
+                            type="button"
+                            className="arc-btn"
+                            onClick={() => {
+                              onHaptic?.('light');
+                              onOpenVaultFolder();
+                            }}
+                          >
+                            <FolderOpen size={14} />
+                            <span>{isZh ? '一键打开缓存目录' : 'Open Cache Folder'}</span>
+                          </button>
+                        )}
+                        {onOpenBackupFolder && (
+                          <button
+                            type="button"
+                            className="arc-btn arc-btn-primary"
+                            onClick={() => {
+                              onHaptic?.('light');
+                              onOpenBackupFolder();
+                            }}
+                          >
+                            <FolderOpen size={14} />
+                            <span>
+                              {runtimeInfo.isTauri
+                                ? isZh
+                                  ? '一键打开备份文件夹'
+                                  : 'Open Backup Folder'
+                                : isZh
+                                  ? '一键导出当前备份'
+                                  : 'Export Backup Now'}
+                            </span>
+                          </button>
+                        )}
+                        {onRunManualBackup && (
+                          <button
+                            type="button"
+                            className="arc-btn"
+                            onClick={() => {
+                              onHaptic?.('success');
+                              onRunManualBackup();
+                            }}
+                          >
+                            <RefreshCw size={13} />
+                            <span>{isZh ? '立即备份一次' : 'Backup Now'}</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </>
               )}
@@ -3313,14 +3463,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     >
                       <div>{isZh ? '运行宿主：' : 'Runtime Host: '}{runtimeInfo.platform}</div>
                       <div>{isZh ? '档案存储位置：' : 'Vault Directory: '}{runtimeInfo.vaultDir}</div>
+                      <div style={{ wordBreak: 'break-all' }}>
+                        {isZh ? '自动备份目录：' : 'Auto-Backup Directory: '}
+                        {runtimeInfo.backupDir ?? runtimeInfo.vaultDir}
+                      </div>
                       <div>
                         {isZh
                           ? '核心特性：Word 无损封面剥离 · 平行批注 Arc-Link · CAS 去重快照 · 跨版本考古 · 双模隐私 AI'
                           : 'Core Features: Lossless Word Cover Split · Parallel Arc-Link Annotations · CAS Snapshots · Version Archaeology · Dual-Mode Privacy AI'}
                       </div>
                     </div>
-                    {onOpenTutorial && (
-                      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-start' }}>
+                    <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-start' }}>
+                      {onOpenVaultFolder && (
+                        <button
+                          type="button"
+                          className="arc-btn"
+                          onClick={() => {
+                            onHaptic?.('light');
+                            onOpenVaultFolder();
+                          }}
+                        >
+                          <FolderOpen size={14} />
+                          <span>{isZh ? '一键打开缓存目录' : 'Open Cache Folder'}</span>
+                        </button>
+                      )}
+                      {onOpenBackupFolder && (
+                        <button
+                          type="button"
+                          className="arc-btn"
+                          onClick={() => {
+                            onHaptic?.('light');
+                            onOpenBackupFolder();
+                          }}
+                        >
+                          <FolderOpen size={14} />
+                          <span>
+                            {runtimeInfo.isTauri
+                              ? isZh
+                                ? '一键打开备份文件夹'
+                                : 'Open Backup Folder'
+                              : isZh
+                                ? '一键导出当前备份'
+                                : 'Export Backup Now'}
+                          </span>
+                        </button>
+                      )}
+                      {onOpenTutorial && (
                         <button
                           type="button"
                           className="arc-btn arc-btn-primary"
@@ -3337,8 +3525,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               : 'Replay Interactive Tutorial (Select Modules)'}
                           </span>
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
 
                   <div className="arc-settings-card">

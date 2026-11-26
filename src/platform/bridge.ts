@@ -5,19 +5,148 @@ export function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
+const WEB_CUSTOM_CACHE_DIR_KEY = 'arcvault_custom_cache_dir_v1';
+
 export async function nativeGetRuntimeInfo(): Promise<{
   isTauri: boolean;
   platform: string;
   vaultDir: string;
+  backupDir: string;
 }> {
   if (!isTauriRuntime()) {
+    let customLabel: string | null = null;
+    try {
+      customLabel = localStorage.getItem(WEB_CUSTOM_CACHE_DIR_KEY);
+    } catch {
+      customLabel = null;
+    }
+    const base = customLabel?.trim() || 'Browser IndexedDB / LocalStorage';
     return {
       isTauri: false,
       platform: 'Web Preview (Vite)',
-      vaultDir: 'Browser IndexedDB / LocalStorage',
+      vaultDir: base,
+      backupDir: customLabel?.trim()
+        ? `${customLabel.trim()}/backups (IndexedDB)`
+        : 'Browser IndexedDB (自动草稿与定时快照)',
     };
   }
   return invoke('get_runtime_info');
+}
+
+export async function nativeOpenVaultFolder(): Promise<{
+  ok: boolean;
+  path: string;
+  message?: string;
+}> {
+  if (!isTauriRuntime()) {
+    return {
+      ok: false,
+      path: 'Browser IndexedDB',
+      message: 'Web/浏览器预览模式数据保存在浏览器 IndexedDB 中，无法直接打开系统文件夹。',
+    };
+  }
+  try {
+    const path = await invoke<string>('open_vault_folder');
+    return { ok: true, path };
+  } catch (err) {
+    return {
+      ok: false,
+      path: '',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+export async function nativePickVaultDirectory(): Promise<string | null> {
+  if (isTauriRuntime()) {
+    try {
+      return await invoke<string | null>('pick_vault_directory');
+    } catch {
+      return null;
+    }
+  }
+  const picker = (window as unknown as { showDirectoryPicker?: () => Promise<{ name: string }> })
+    .showDirectoryPicker;
+  if (typeof picker === 'function') {
+    try {
+      const handle = await picker();
+      return handle?.name ? `浏览器授权目录：${handle.name}` : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+export async function nativeSetCustomVaultDir(path: string): Promise<{
+  isTauri: boolean;
+  platform: string;
+  vaultDir: string;
+  backupDir: string;
+}> {
+  const trimmed = path.trim();
+  if (!trimmed) {
+    throw new Error('缓存目录路径不能为空');
+  }
+  if (!isTauriRuntime()) {
+    try {
+      localStorage.setItem(WEB_CUSTOM_CACHE_DIR_KEY, trimmed);
+    } catch {
+      // ignore storage quota
+    }
+    return {
+      isTauri: false,
+      platform: 'Web Preview (Vite)',
+      vaultDir: trimmed,
+      backupDir: `${trimmed}/backups (IndexedDB)`,
+    };
+  }
+  return invoke('set_custom_vault_dir', { path: trimmed });
+}
+
+export async function nativeSaveWorkspaceBackup(
+  content: string,
+  scheduled: boolean,
+): Promise<string | null> {
+  if (!isTauriRuntime()) return null;
+  try {
+    return await invoke<string>('save_workspace_backup', { content, scheduled });
+  } catch {
+    return null;
+  }
+}
+
+export async function nativeLoadWorkspaceBackup(): Promise<string | null> {
+  if (!isTauriRuntime()) return null;
+  try {
+    return await invoke<string | null>('load_workspace_backup');
+  } catch {
+    return null;
+  }
+}
+
+export async function nativeOpenBackupFolder(): Promise<{
+  ok: boolean;
+  path: string;
+  message?: string;
+}> {
+  if (!isTauriRuntime()) {
+    return {
+      ok: false,
+      path: 'Browser IndexedDB',
+      message: 'Web 预览模式数据保存在浏览器 IndexedDB 中，无法直接打开本地文件夹；可使用“立即导出备份”下载到本地。',
+    };
+  }
+  try {
+    const path = await invoke<string>('open_backup_folder');
+    return { ok: true, path };
+  } catch (err) {
+    return {
+      ok: false,
+      path: '',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 export async function nativeStartWatchFolder(folderPath: string): Promise<string> {

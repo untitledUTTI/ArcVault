@@ -6,11 +6,53 @@ mod watcher;
 
 use cas::VaultStorage;
 use commands::AppState;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use sync::LanSyncServerState;
 use tauri::{Manager, WebviewWindowBuilder};
 use watcher::FolderWatcherState;
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct StorageConfig {
+    custom_vault_dir: Option<String>,
+}
+
+fn storage_config_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_data_dir()
+        .ok()
+        .map(|d| d.join("storage_config.json"))
+}
+
+pub fn load_custom_vault_dir_config(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let path = storage_config_path(app)?;
+    let raw = std::fs::read_to_string(path).ok()?;
+    let cfg = serde_json::from_str::<StorageConfig>(&raw).ok()?;
+    let dir = cfg.custom_vault_dir?.trim().to_string();
+    if dir.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(dir))
+    }
+}
+
+pub fn save_custom_vault_dir_config(
+    app: &tauri::AppHandle,
+    dir: Option<&str>,
+) -> Result<(), String> {
+    let Some(path) = storage_config_path(app) else {
+        return Err("无法定位应用配置目录".into());
+    };
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let cfg = StorageConfig {
+        custom_vault_dir: dir.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
+    };
+    let json = serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())?;
+    std::fs::write(path, json.as_bytes()).map_err(|e| e.to_string())
+}
 
 fn write_startup_log(msg: &str) {
     let log_path = std::env::temp_dir().join("arcvault_startup.log");
@@ -19,6 +61,9 @@ fn write_startup_log(msg: &str) {
 
 fn initialize_storage_with_fallback(app: &tauri::App) -> Result<VaultStorage, String> {
     let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(custom_dir) = load_custom_vault_dir_config(app.handle()) {
+        candidates.push(custom_dir);
+    }
     if let Ok(dir) = app.path().app_data_dir() {
         candidates.push(dir.join("arcvault_data"));
     }
@@ -123,6 +168,12 @@ pub fn run() {
             commands::start_watch_folder,
             commands::stop_watch_folder,
             commands::write_exported_file,
+            commands::save_workspace_backup,
+            commands::load_workspace_backup,
+            commands::open_backup_folder,
+            commands::open_vault_folder,
+            commands::set_custom_vault_dir,
+            commands::pick_vault_directory,
             mobile::trigger_haptic,
             mobile::biometric_check_available,
             mobile::biometric_authenticate,
