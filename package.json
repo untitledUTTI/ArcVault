@@ -1,0 +1,43 @@
+{
+  "name": "arcvault",
+  "private": true,
+  "version": "0.4.0",
+  "license": "MIT",
+  "description": "ArcVault (穹档) - Local-First Cross-Platform Personal Archive & Academic Writing Studio",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.8.0",
+    "@codemirror/lang-markdown": "^6.3.2",
+    "@codemirror/language": "^6.10.8",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.36.5",
+    "@lezer/highlight": "^1.2.1",
+    "@material/material-color-utilities": "^0.4.0",
+    "@tauri-apps/api": "^2.2.0",
+    "@xmldom/xmldom": "^0.9.6",
+    "diff": "^7.0.0",
+    "jszip": "^3.10.1",
+    "katex": "^0.16.21",
+    "lucide-react": "^0.475.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.2.0",
+    "@types/diff": "^7.0.1",
+    "@types/katex": "^0.16.7",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vitest": "^3.0.5"
+  }
+}

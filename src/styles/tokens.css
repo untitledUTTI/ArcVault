@@ -1,0 +1,197 @@
+:root {
+  --arc-comment-color: #2563eb;
+  --arc-revision-color: #dc2626;
+  --arc-font-sans: 'Inter', 'PingFang SC', 'Microsoft YaHei UI', system-ui, -apple-system, sans-serif;
+  --arc-font-serif: 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', Georgia, serif;
+  --arc-font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+  --arc-ui-font: var(--arc-font-sans);
+  --arc-editor-font: var(--arc-font-sans);
+  --arc-editor-font-size: 14.5px;
+  --arc-editor-line-height: 1.8;
+  --arc-radius: 12px;
+  --arc-radius-sm: 8px;
+  --arc-transition: 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  --arc-motion-panel: 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  --scrollbar-thumb: rgba(100, 116, 139, 0.24);
+  --scrollbar-thumb-hover: rgba(100, 116, 139, 0.48);
+  --scrollbar-thumb-active: rgba(59, 91, 219, 0.72);
+  --arc-caret-color: #2c4cd1;
+}
+
+/* 1. Light (浅色极简) */
+[data-theme='light'] {
+  --bg-app: #f6f7fb;
+  --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-subtle: #eef1f7;
+  --bg-hover: #e5e9f2;
+  --border-subtle: #e2e7f0;
+  --border-strong: #c9d2e3;
+  --text-primary: #141824;
+  --text-secondary: #4e596e;
+  --text-muted: #8490a6;
+  --accent: #3b5bdb;
+  --accent-soft: rgba(59, 91, 219, 0.12);
+  --accent-text: #ffffff;
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 10px 28px rgba(15, 23, 42, 0.09);
+  --arc-dome-gradient: linear-gradient(135deg, #3b5bdb 0%, #6366f1 55%, #0ea5e9 100%);
+  --editor-font: var(--arc-editor-font);
+  --scrollbar-thumb: rgba(100, 116, 139, 0.24);
+  --scrollbar-thumb-hover: rgba(71, 85, 105, 0.48);
+  --scrollbar-thumb-active: rgba(59, 91, 219, 0.7);
+  --arc-caret-color: #2c4cd1;
+}
+
+/* 2. Dark (深色) */
+[data-theme='dark'] {
+  --bg-app: #0d1117;
+  --bg-surface: #141a23;
+  --bg-elevated: #1a222e;
+  --bg-subtle: #1e2736;
+  --bg-hover: #253042;
+  --border-subtle: #283344;
+  --border-strong: #394860;
+  --text-primary: #e6edf7;
+  --text-secondary: #9fb0c8;
+  --text-muted: #6e7f98;
+  --accent: #60a5fa;
+  --accent-soft: rgba(96, 165, 250, 0.16);
+  --accent-text: #081226;
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 14px 36px rgba(0, 0, 0, 0.5);
+  --arc-dome-gradient: linear-gradient(135deg, #60a5fa 0%, #818cf8 55%, #38bdf8 100%);
+  --editor-font: var(--arc-editor-font);
+  --scrollbar-thumb: rgba(148, 163, 184, 0.22);
+  --scrollbar-thumb-hover: rgba(148, 163, 184, 0.45);
+  --scrollbar-thumb-active: rgba(96, 165, 250, 0.75);
+  --arc-caret-color: #7cc4ff;
+}
+
+/* 3. Paper (护眼纸感) */
+[data-theme='paper'] {
+  --bg-app: #f3ede0;
+  --bg-surface: #faf6ec;
+  --bg-elevated: #fffdf7;
+  --bg-subtle: #ebe3d0;
+  --bg-hover: #e2d8c2;
+  --border-subtle: #ded4be;
+  --border-strong: #c5b89d;
+  --text-primary: #2c251b;
+  --text-secondary: #5d5140;
+  --text-muted: #8a7c68;
+  --accent: #8c5a2b;
+  --accent-soft: rgba(140, 90, 43, 0.13);
+  --accent-text: #fffdf7;
+  --shadow-sm: 0 2px 8px rgba(68, 52, 29, 0.06);
+  --shadow-md: 0 10px 26px rgba(68, 52, 29, 0.1);
+  --arc-dome-gradient: linear-gradient(135deg, #8c5a2b 0%, #b47843 55%, #d99b52 100%);
+  --editor-font: var(--arc-editor-font);
+  --scrollbar-thumb: rgba(140, 90, 43, 0.24);
+  --scrollbar-thumb-hover: rgba(140, 90, 43, 0.48);
+  --scrollbar-thumb-active: rgba(140, 90, 43, 0.72);
+  --arc-caret-color: #8a4b16;
+}
+
+/* 4. Material 3 Expressive (灵动高表现力) */
+[data-theme='m3-expressive'] {
+  --m3-surface-container-low: #f8f2fc;
+  --m3-surface-container: #f2eaf9;
+  --m3-surface-container-high: #e9dff5;
+  --m3-primary: #6750a4;
+  --m3-primary-container: #eaddff;
+  --m3-on-primary-container: #21005d;
+  --m3-tertiary: #7d5260;
+  --m3-tertiary-container: #ffd8e4;
+  --m3-on-tertiary-container: #31111d;
+  --bg-app: #f3ecf9;
+  --bg-surface: #fbf7ff;
+  --bg-elevated: #ffffff;
+  --bg-subtle: #ebe1f7;
+  --bg-hover: #e1d3f4;
+  --border-subtle: rgba(121, 116, 126, 0.18);
+  --border-strong: #b69ee2;
+  --text-primary: #1d1629;
+  --text-secondary: #4e4364;
+  --text-muted: #796c91;
+  --accent: #6750a4;
+  --accent-soft: #eaddff;
+  --accent-text: #ffffff;
+  --arc-radius: 28px;
+  --arc-radius-sm: 16px;
+  --arc-transition: 220ms cubic-bezier(0.2, 0.9, 0.25, 1);
+  --arc-motion-panel: 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  --shadow-sm: 0 4px 14px rgba(103, 80, 164, 0.08);
+  --shadow-md: 0 16px 40px rgba(79, 55, 139, 0.16);
+  --arc-dome-gradient: linear-gradient(135deg, #6750a4 0%, #9b5de5 50%, #e05297 100%);
+  --editor-font: var(--arc-editor-font);
+  --scrollbar-thumb: rgba(103, 80, 164, 0.24);
+  --scrollbar-thumb-hover: rgba(103, 80, 164, 0.48);
+  --scrollbar-thumb-active: rgba(103, 80, 164, 0.78);
+  --arc-caret-color: #6750a4;
+}
+
+/* 5. Celestial Optics (天象光影 · WebGL2 Shader Frosted Obsidian) */
+[data-theme='celestial-optics'] {
+  --celestial-glass-alpha: 0.039;
+  --celestial-glass-alpha-strong: 0.043;
+  --celestial-glass-card-alpha: 0.036;
+  --celestial-glass-filter: blur(1.2px) saturate(102%);
+  --bg-app: transparent;
+  --bg-surface: rgba(11, 16, 33, var(--celestial-glass-alpha));
+  --bg-elevated: rgba(14, 21, 44, 0.88);
+  --bg-subtle: rgba(26, 36, 72, 0.56);
+  --bg-hover: rgba(45, 61, 114, 0.62);
+  --border-subtle: rgba(186, 214, 255, 0.16);
+  --border-strong: rgba(186, 214, 255, 0.34);
+  --text-primary: #eef4ff;
+  --text-secondary: #b9cae8;
+  --text-muted: #7f95bd;
+  --accent: #7dd3fc;
+  --accent-soft: rgba(125, 211, 252, 0.18);
+  --accent-text: #061326;
+  --shadow-sm: 0 4px 16px rgba(2, 6, 20, 0.45);
+  --shadow-md: 0 18px 46px rgba(2, 6, 20, 0.68);
+  --arc-dome-gradient: linear-gradient(135deg, #7dd3fc 0%, #c4b5fd 52%, #f472b6 100%);
+  --editor-font: var(--arc-editor-font);
+  --scrollbar-thumb: rgba(147, 197, 253, 0.26);
+  --scrollbar-thumb-hover: rgba(147, 197, 253, 0.5);
+  --scrollbar-thumb-active: rgba(125, 211, 252, 0.82);
+  --arc-caret-color: #93e6ff;
+}
+
+/* 6. Real-Time Weather Theme (实时天气 · Atmos Live) */
+[data-theme='weather-live'] {
+  --weather-glass-alpha: 0.039;
+  --weather-glass-alpha-strong: 0.043;
+  --weather-glass-card-alpha: 0.036;
+  --weather-glass-filter: blur(1.2px) saturate(102%);
+  --weather-surface-rgb: 10, 17, 30;
+  --weather-surface-deep-rgb: 8, 14, 28;
+  --weather-card-rgb: 14, 24, 44;
+  --weather-border-rgb: 196, 224, 255;
+  --weather-glow-primary-rgb: 56, 189, 248;
+  --weather-glow-secondary-rgb: 129, 140, 248;
+  --weather-shadow-rgb: 2, 8, 22;
+  --bg-app: transparent;
+  --bg-surface: rgba(var(--weather-surface-rgb), var(--weather-glass-alpha));
+  --bg-elevated: rgba(12, 19, 34, 0.88);
+  --bg-subtle: rgba(24, 38, 62, 0.52);
+  --bg-hover: rgba(42, 68, 108, 0.58);
+  --border-subtle: rgba(210, 232, 255, 0.17);
+  --border-strong: rgba(165, 216, 255, 0.36);
+  --text-primary: #f2f7ff;
+  --text-secondary: #c3d7f0;
+  --text-muted: #8aa5c8;
+  --accent: #38bdf8;
+  --accent-soft: rgba(56, 189, 248, 0.18);
+  --accent-text: #041322;
+  --shadow-sm: 0 4px 16px rgba(2, 8, 22, 0.44);
+  --shadow-md: 0 18px 46px rgba(2, 8, 22, 0.68);
+  --arc-dome-gradient: linear-gradient(135deg, #38bdf8 0%, #818cf8 52%, #f472b6 100%);
+  --editor-font: var(--arc-editor-font);
+  --scrollbar-thumb: rgba(165, 216, 255, 0.28);
+  --scrollbar-thumb-hover: rgba(165, 216, 255, 0.52);
+  --scrollbar-thumb-active: rgba(56, 189, 248, 0.85);
+  --arc-caret-color: #93d0ff;
+}
