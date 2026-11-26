@@ -37,7 +37,7 @@ void main() {
 
     test('CAS deduplicates identical snapshots and extracts deleted darlings', () {
       final cas = CasObjectStore();
-      final doc = ArchiveDocument(
+      const doc = ArchiveDocument(
         id: 'd1',
         spaceId: 'sp_paper',
         title: 'Test',
@@ -47,7 +47,7 @@ void main() {
         activeFormat: EditorFormat.markdown,
         markdownText: '旧段落中有一段较长的废稿文字用于测试废稿墓地自动捕获能力。',
         latexText: '',
-        coverRule: const CoverRule(
+        coverRule: CoverRule(
           documentId: 'd1',
           coverEndBlockIndex: 0,
           remember: false,

@@ -474,7 +474,7 @@ class OoxmlEngine {
           }
 
           if (lname == 'del') {
-            final delId = _attr(node, 'id').isEmpty ? 'del_$blockIndex\_$ci' : _attr(node, 'id');
+            final delId = _attr(node, 'id').isEmpty ? 'del_${blockIndex}_$ci' : _attr(node, 'id');
             final delText = node.descendants
                 .whereType<XmlElement>()
                 .where((e) => e.localName == 'delText' || e.localName == 't')
@@ -522,7 +522,7 @@ class OoxmlEngine {
           }
 
           if (lname == 'ins') {
-            final insId = _attr(node, 'id').isEmpty ? 'ins_$blockIndex\_$ci' : _attr(node, 'id');
+            final insId = _attr(node, 'id').isEmpty ? 'ins_${blockIndex}_$ci' : _attr(node, 'id');
             final insText = node.descendants
                 .whereType<XmlElement>()
                 .where((e) => e.localName == 't')
@@ -932,7 +932,7 @@ class OoxmlEngine {
 
     final docBytes = utf8.encode(newDocumentXml);
     outArchive.addFile(ArchiveFile('word/document.xml', docBytes.length, docBytes));
-    return Uint8List.fromList(ZipEncoder().encode(outArchive)!);
+    return Uint8List.fromList(ZipEncoder().encode(outArchive));
   }
 
   static Uint8List buildSamplePaperDocx() {
@@ -1080,7 +1080,7 @@ class OoxmlEngine {
 </w:document>''',
     );
 
-    return Uint8List.fromList(ZipEncoder().encode(archive)!);
+    return Uint8List.fromList(ZipEncoder().encode(archive));
   }
 
   static String _attr(XmlElement? el, String name) {

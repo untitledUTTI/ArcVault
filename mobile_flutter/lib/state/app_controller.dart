@@ -17,7 +17,6 @@ import '../core/diff_engine.dart';
 import '../core/haptics_service.dart';
 import '../core/office_parser.dart';
 import '../core/ooxml_engine.dart';
-import '../core/sync_engine.dart';
 import '../core/tutorial_flow.dart';
 import '../core/vault_crypto.dart';
 import '../core/workspace_storage.dart';

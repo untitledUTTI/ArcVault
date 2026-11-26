@@ -253,7 +253,7 @@ class ArcLiquidGlassSurface extends StatelessWidget {
     );
 
     final shape = LiquidRoundedSuperellipse(
-      borderRadius: Radius.circular(borderRadius),
+      borderRadius: borderRadius,
     );
 
     if (s.compatibilityMode) {
@@ -287,7 +287,7 @@ class ArcLiquidGlassSurface extends StatelessWidget {
 
     return LiquidGlassLayer(
       settings: lgSettings,
-      child: LiquidGlass.inLayer(
+      child: LiquidGlass(
         shape: shape,
         child: DecoratedBox(
           decoration: BoxDecoration(

@@ -140,7 +140,7 @@ class MonetEngine {
         final h = sourceHct.hue;
         final baseC = sourceHct.chroma < 46 ? 46.0 : sourceHct.chroma;
         scheme = DynamicScheme(
-          sourceColorArgb: sourceHct.toInt(),
+          sourceColorHct: sourceHct,
           variant: Variant.expressive,
           contrastLevel: contrast,
           isDark: isDark,

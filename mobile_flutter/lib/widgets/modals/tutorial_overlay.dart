@@ -360,18 +360,22 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
         Text('请确认本地 CAS 去重快照、索引与自动备份的存放目录：',
             style: TextStyle(fontSize: 12.5, color: t.textSecondary)),
         const SizedBox(height: 12),
-        RadioListTile<bool>(
-          value: false,
+        RadioGroup<bool>(
           groupValue: _cacheUseCustom,
-          onChanged: (v) => setState(() => _cacheUseCustom = false),
-          title: const Text('使用默认安全沙盒目录'),
-          subtitle: Text(c.resolvedVaultDir, style: TextStyle(fontSize: 11.5, color: t.textMuted)),
-        ),
-        RadioListTile<bool>(
-          value: true,
-          groupValue: _cacheUseCustom,
-          onChanged: (v) => setState(() => _cacheUseCustom = true),
-          title: const Text('自定义缓存目录路径'),
+          onChanged: (v) => setState(() => _cacheUseCustom = v ?? false),
+          child: Column(
+            children: [
+              RadioListTile<bool>(
+                value: false,
+                title: const Text('使用默认安全沙盒目录'),
+                subtitle: Text(c.resolvedVaultDir, style: TextStyle(fontSize: 11.5, color: t.textMuted)),
+              ),
+              const RadioListTile<bool>(
+                value: true,
+                title: Text('自定义缓存目录路径'),
+              ),
+            ],
+          ),
         ),
         if (_cacheUseCustom) ...[
           Row(

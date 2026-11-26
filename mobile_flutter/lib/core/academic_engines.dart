@@ -258,8 +258,8 @@ class ConsistencyChecker {
         id: 'issue_math_unbalanced',
         severity: 'error',
         category: 'math-syntax',
-        title: '行内数学公式定界符 `$` 未成对闭合',
-        detail: '检测到奇数个未转义的 `$` 符号，可能导致 LaTeX 或 Word OMML 回写失败。',
+        title: r'行内数学公式定界符 `$` 未成对闭合',
+        detail: r'检测到奇数个未转义的 `$` 符号，可能导致 LaTeX 或 Word OMML 回写失败。',
         snippet: r'$ ...',
       ));
     }
@@ -405,9 +405,11 @@ class AiGateway {
       }
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       final choices = data['choices'] as List<dynamic>?;
-      final content = (choices?.isNotEmpty == true
-              ? (choices!.first as Map<String, dynamic>)['message']?['content']
-              : data['message']?['content'])
+      final firstChoiceMsg = (choices != null && choices.isNotEmpty)
+          ? ((choices.first as Map<String, dynamic>)['message'] as Map<String, dynamic>?)
+          : null;
+      final fallbackMsg = data['message'] as Map<String, dynamic>?;
+      final content = (firstChoiceMsg?['content'] ?? fallbackMsg?['content'])
           ?.toString()
           .trim();
       if (content == null || content.isEmpty) {
