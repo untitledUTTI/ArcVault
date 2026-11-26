@@ -1,0 +1,39 @@
+name: 'build-macos'
+
+on:
+  workflow_dispatch:   # 允许在 GitHub 网页上手动点击运行
+
+jobs:
+  build-macos:
+    permissions:
+      contents: write   # 允许创建 Release
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 一次编译，同时生成 Intel 和 Apple Silicon 通用版本
+          - target: universal-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Install frontend dependencies
+        run: npm install   # 如果你用 pnpm 或 yarn，请自行替换
+
+      - name: Build macOS app
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: --target universal-apple-darwin   # 通用二进制，Intel / M 系列都能跑
+          releaseDraft: true                       # 先存为草稿 Release，确认无误后再手动发布
