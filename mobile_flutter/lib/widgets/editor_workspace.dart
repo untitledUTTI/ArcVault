@@ -9,7 +9,6 @@ import '../i18n/dictionaries.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
 import '../theme/arc_theme.dart';
-import '../theme/liquid_glass_surface.dart';
 import 'touch_scroll_scrubber.dart';
 
 class AnnotationHighlightTextController extends TextEditingController {
@@ -194,14 +193,9 @@ class _EditorWorkspaceState extends State<EditorWorkspace> {
     final policy = c.effectiveAiPolicy;
     final enabledSkills = SkillRegistry.enabledSkills(s.skills);
 
-    // High readability backdrop: never apply heavy refraction behind long-form text!
-    final editorSurfaceColor = t.isLiquidGlass
-        ? t.bgElevated.withValues(alpha: t.isDark ? 0.72 : 0.84)
-        : t.bgApp;
-
     return Container(
       key: c.tourTargets.keyFor(TutorialTargetId.workspaceMain),
-      color: editorSurfaceColor,
+      color: t.bgApp,
       child: Column(
         children: [
           // Metadata / Privacy / Cover / Citations Bar
@@ -210,7 +204,7 @@ class _EditorWorkspaceState extends State<EditorWorkspace> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
-              color: t.isLiquidGlass ? t.bgSurface.withValues(alpha: 0.45) : t.bgSubtle,
+              color: t.bgSubtle,
               border: Border(bottom: BorderSide(color: t.borderSubtle)),
             ),
             child: SingleChildScrollView(
@@ -360,7 +354,6 @@ class _EditorWorkspaceState extends State<EditorWorkspace> {
             scrollController: _editorScroll,
             documentText: doc.activeText,
             scrubberSettings: s.scrollScrubber,
-            liquidGlassSettings: s.liquidGlass,
             onHaptic: widget.controller.triggerHaptic,
           ),
         ),
@@ -444,7 +437,6 @@ class _EditorWorkspaceState extends State<EditorWorkspace> {
             scrollController: _previewScroll,
             documentText: doc.activeText,
             scrubberSettings: s.scrollScrubber,
-            liquidGlassSettings: s.liquidGlass,
             onHaptic: widget.controller.triggerHaptic,
           ),
         ),
@@ -539,7 +531,7 @@ class _OfficePreviewBody extends StatelessWidget {
         if (preview.kind == 'pptx')
           ...preview.slides.map((sl) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: ArcFrostedCardSurface(
+                child: ArcCardSurface(
                   padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -569,7 +561,7 @@ class _OfficePreviewBody extends StatelessWidget {
         if (preview.kind == 'xlsx')
           ...preview.sheets.map((sh) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: ArcFrostedCardSurface(
+                child: ArcCardSurface(
                   padding: const EdgeInsets.all(12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

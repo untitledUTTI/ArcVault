@@ -49,199 +49,24 @@ enum LocaleId {
       raw == 'en-US' ? LocaleId.enUS : LocaleId.zhCN;
 }
 
-/// Mobile theme set (5 themes):
-/// celestial-optics and weather-live are deprecated on mobile and replaced by liquid-glass.
+/// Mobile theme set (4 themes):
+/// celestial-optics, weather-live, and liquid-glass are removed on mobile.
 enum MobileThemeId {
   light('light'),
   dark('dark'),
   paper('paper'),
-  m3Expressive('m3-expressive'),
-  liquidGlass('liquid-glass');
+  m3Expressive('m3-expressive');
 
   const MobileThemeId(this.wire);
   final String wire;
 
   static MobileThemeId fromWire(String? raw) {
     if (raw == 'celestial-optics' || raw == 'weather-live' || raw == 'liquid-glass') {
-      return MobileThemeId.liquidGlass;
+      return MobileThemeId.light;
     }
     return MobileThemeId.values.firstWhere(
       (e) => e.wire == raw,
       orElse: () => MobileThemeId.light,
-    );
-  }
-}
-
-enum LiquidGlassPreset {
-  crystal('crystal'),
-  frosted('frosted'),
-  soft('soft');
-
-  const LiquidGlassPreset(this.wire);
-  final String wire;
-
-  static LiquidGlassPreset fromWire(String? raw) =>
-      LiquidGlassPreset.values.firstWhere(
-        (e) => e.wire == raw,
-        orElse: () => LiquidGlassPreset.crystal,
-      );
-}
-
-enum LiquidGlassBackdropPreset {
-  auroraMist('aurora-mist'),
-  prismDusk('prism-dusk'),
-  oceanSilk('ocean-silk'),
-  warmAmber('warm-amber');
-
-  const LiquidGlassBackdropPreset(this.wire);
-  final String wire;
-
-  static LiquidGlassBackdropPreset fromWire(String? raw) =>
-      LiquidGlassBackdropPreset.values.firstWhere(
-        (e) => e.wire == raw,
-        orElse: () => LiquidGlassBackdropPreset.auroraMist,
-      );
-}
-
-class LiquidGlassSettingsModel {
-  const LiquidGlassSettingsModel({
-    this.isDark = false,
-    this.blur = 10.0,
-    this.thickness = 22.0,
-    this.chromaticAberration = 0.014,
-    this.tintOpacity = 0.22,
-    this.saturation = 1.15,
-    this.lightIntensity = 0.82,
-    this.backdropPreset = LiquidGlassBackdropPreset.auroraMist,
-    this.customWallpaperPath,
-    this.compatibilityMode = false,
-    this.previewBarEnabled = false,
-  });
-
-  final bool isDark;
-  final double blur; // 0..28
-  final double thickness; // 6..45
-  final double chromaticAberration; // 0..0.04
-  final double tintOpacity; // 0.04..0.55
-  final double saturation; // 0.6..1.8
-  final double lightIntensity; // 0..1.5
-  final LiquidGlassBackdropPreset backdropPreset;
-  final String? customWallpaperPath;
-  final bool compatibilityMode;
-  final bool previewBarEnabled;
-
-  factory LiquidGlassSettingsModel.fromPreset(
-    LiquidGlassPreset preset, {
-    bool isDark = false,
-    LiquidGlassBackdropPreset backdropPreset = LiquidGlassBackdropPreset.auroraMist,
-    String? customWallpaperPath,
-    bool compatibilityMode = false,
-    bool previewBarEnabled = false,
-  }) {
-    switch (preset) {
-      case LiquidGlassPreset.crystal:
-        return LiquidGlassSettingsModel(
-          isDark: isDark,
-          blur: 6.0,
-          thickness: 28.0,
-          chromaticAberration: 0.018,
-          tintOpacity: 0.16,
-          saturation: 1.24,
-          lightIntensity: 0.96,
-          backdropPreset: backdropPreset,
-          customWallpaperPath: customWallpaperPath,
-          compatibilityMode: compatibilityMode,
-          previewBarEnabled: previewBarEnabled,
-        );
-      case LiquidGlassPreset.frosted:
-        return LiquidGlassSettingsModel(
-          isDark: isDark,
-          blur: 18.0,
-          thickness: 16.0,
-          chromaticAberration: 0.008,
-          tintOpacity: 0.34,
-          saturation: 1.08,
-          lightIntensity: 0.7,
-          backdropPreset: backdropPreset,
-          customWallpaperPath: customWallpaperPath,
-          compatibilityMode: compatibilityMode,
-          previewBarEnabled: previewBarEnabled,
-        );
-      case LiquidGlassPreset.soft:
-        return LiquidGlassSettingsModel(
-          isDark: isDark,
-          blur: 12.0,
-          thickness: 12.0,
-          chromaticAberration: 0.004,
-          tintOpacity: 0.25,
-          saturation: 1.0,
-          lightIntensity: 0.52,
-          backdropPreset: backdropPreset,
-          customWallpaperPath: customWallpaperPath,
-          compatibilityMode: compatibilityMode,
-          previewBarEnabled: previewBarEnabled,
-        );
-    }
-  }
-
-  LiquidGlassSettingsModel copyWith({
-    bool? isDark,
-    double? blur,
-    double? thickness,
-    double? chromaticAberration,
-    double? tintOpacity,
-    double? saturation,
-    double? lightIntensity,
-    LiquidGlassBackdropPreset? backdropPreset,
-    String? customWallpaperPath,
-    bool clearWallpaper = false,
-    bool? compatibilityMode,
-    bool? previewBarEnabled,
-  }) {
-    return LiquidGlassSettingsModel(
-      isDark: isDark ?? this.isDark,
-      blur: blur ?? this.blur,
-      thickness: thickness ?? this.thickness,
-      chromaticAberration: chromaticAberration ?? this.chromaticAberration,
-      tintOpacity: tintOpacity ?? this.tintOpacity,
-      saturation: saturation ?? this.saturation,
-      lightIntensity: lightIntensity ?? this.lightIntensity,
-      backdropPreset: backdropPreset ?? this.backdropPreset,
-      customWallpaperPath: clearWallpaper ? null : (customWallpaperPath ?? this.customWallpaperPath),
-      compatibilityMode: compatibilityMode ?? this.compatibilityMode,
-      previewBarEnabled: previewBarEnabled ?? this.previewBarEnabled,
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-        'isDark': isDark,
-        'blur': blur,
-        'thickness': thickness,
-        'chromaticAberration': chromaticAberration,
-        'tintOpacity': tintOpacity,
-        'saturation': saturation,
-        'lightIntensity': lightIntensity,
-        'backdropPreset': backdropPreset.wire,
-        if (customWallpaperPath != null) 'customWallpaperPath': customWallpaperPath,
-        'compatibilityMode': compatibilityMode,
-        'previewBarEnabled': previewBarEnabled,
-      };
-
-  factory LiquidGlassSettingsModel.fromJson(Map<String, dynamic>? json) {
-    if (json == null) return const LiquidGlassSettingsModel();
-    return LiquidGlassSettingsModel(
-      isDark: json['isDark'] == true,
-      blur: (json['blur'] as num?)?.toDouble().clamp(0.0, 28.0) ?? 10.0,
-      thickness: (json['thickness'] as num?)?.toDouble().clamp(6.0, 45.0) ?? 22.0,
-      chromaticAberration:
-          (json['chromaticAberration'] as num?)?.toDouble().clamp(0.0, 0.04) ?? 0.014,
-      tintOpacity: (json['tintOpacity'] as num?)?.toDouble().clamp(0.04, 0.55) ?? 0.22,
-      saturation: (json['saturation'] as num?)?.toDouble().clamp(0.6, 1.8) ?? 1.15,
-      lightIntensity: (json['lightIntensity'] as num?)?.toDouble().clamp(0.0, 1.5) ?? 0.82,
-      backdropPreset: LiquidGlassBackdropPreset.fromWire(json['backdropPreset'] as String?),
-      customWallpaperPath: json['customWallpaperPath'] as String?,
-      compatibilityMode: json['compatibilityMode'] == true,
-      previewBarEnabled: json['previewBarEnabled'] == true,
     );
   }
 }
@@ -1933,9 +1758,9 @@ class AppSettingsModel {
     this.phrasebank = const PhrasebankSettingsModel(),
     this.typography = const TypographySettingsModel(),
     this.monet = const MonetSettingsModel(),
-    this.liquidGlass = const LiquidGlassSettingsModel(),
     this.haptics = const HapticsSettingsModel(),
     this.scrollScrubber = const ScrollScrubberSettingsModel(),
+    this.quickBarWidthFraction = 1.0,
     this.sync = const SyncSettingsModel(),
     this.biometricEnabled = false,
     this.customVaultDir = '',
@@ -1956,9 +1781,9 @@ class AppSettingsModel {
   final PhrasebankSettingsModel phrasebank;
   final TypographySettingsModel typography;
   final MonetSettingsModel monet;
-  final LiquidGlassSettingsModel liquidGlass;
   final HapticsSettingsModel haptics;
   final ScrollScrubberSettingsModel scrollScrubber;
+  final double quickBarWidthFraction;
   final SyncSettingsModel sync;
   final bool biometricEnabled;
   final String customVaultDir;
@@ -1979,9 +1804,9 @@ class AppSettingsModel {
     PhrasebankSettingsModel? phrasebank,
     TypographySettingsModel? typography,
     MonetSettingsModel? monet,
-    LiquidGlassSettingsModel? liquidGlass,
     HapticsSettingsModel? haptics,
     ScrollScrubberSettingsModel? scrollScrubber,
+    double? quickBarWidthFraction,
     SyncSettingsModel? sync,
     bool? biometricEnabled,
     String? customVaultDir,
@@ -2002,9 +1827,9 @@ class AppSettingsModel {
       phrasebank: phrasebank ?? this.phrasebank,
       typography: typography ?? this.typography,
       monet: monet ?? this.monet,
-      liquidGlass: liquidGlass ?? this.liquidGlass,
       haptics: haptics ?? this.haptics,
       scrollScrubber: scrollScrubber ?? this.scrollScrubber,
+      quickBarWidthFraction: (quickBarWidthFraction ?? this.quickBarWidthFraction).clamp(0.55, 1.0),
       sync: sync ?? this.sync,
       biometricEnabled: biometricEnabled ?? this.biometricEnabled,
       customVaultDir: customVaultDir ?? this.customVaultDir,
@@ -2027,9 +1852,9 @@ class AppSettingsModel {
         'phrasebank': phrasebank.toJson(),
         'typography': typography.toJson(),
         'monet': monet.toJson(),
-        'liquidGlass': liquidGlass.toJson(),
         'haptics': haptics.toJson(),
         'scrollScrubber': scrollScrubber.toJson(),
+        'quickBarWidthFraction': quickBarWidthFraction,
         'sync': sync.toJson(),
         'biometricEnabled': biometricEnabled,
         'customVaultDir': customVaultDir,
@@ -2064,9 +1889,6 @@ class AppSettingsModel {
       monet: MonetSettingsModel.fromJson(
         json['monet'] is Map ? Map<String, dynamic>.from(json['monet'] as Map) : null,
       ),
-      liquidGlass: LiquidGlassSettingsModel.fromJson(
-        json['liquidGlass'] is Map ? Map<String, dynamic>.from(json['liquidGlass'] as Map) : null,
-      ),
       haptics: HapticsSettingsModel.fromJson(
         json['haptics'] is Map ? Map<String, dynamic>.from(json['haptics'] as Map) : null,
       ),
@@ -2075,6 +1897,8 @@ class AppSettingsModel {
             ? Map<String, dynamic>.from(json['scrollScrubber'] as Map)
             : null,
       ),
+      quickBarWidthFraction:
+          (json['quickBarWidthFraction'] as num?)?.toDouble().clamp(0.55, 1.0) ?? 1.0,
       sync: SyncSettingsModel.fromJson(
         json['sync'] is Map ? Map<String, dynamic>.from(json['sync'] as Map) : null,
       ),

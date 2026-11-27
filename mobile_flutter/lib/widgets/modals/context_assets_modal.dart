@@ -3,7 +3,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/tutorial_flow.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
-import '../../theme/liquid_glass_surface.dart';
 
 class ContextAssetsModal extends StatefulWidget {
   const ContextAssetsModal({super.key, required this.controller, this.onClose});
@@ -34,9 +33,8 @@ class _ContextAssetsModalState extends State<ContextAssetsModal> {
     final motives = doc != null ? c.motivationsForDoc(doc.id) : const [];
     final assets = doc != null ? c.assetsForDoc(doc.id) : const [];
 
-    return ArcLiquidGlassSurface(
+    return ArcSurface(
       key: c.tourTargets.keyFor(TutorialTargetId.contextAssetsModal),
-      liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.78,
@@ -110,7 +108,7 @@ class _ContextAssetsModalState extends State<ContextAssetsModal> {
                   const SizedBox(height: 6),
                   ...motives.map((m) => Padding(
                         padding: const EdgeInsets.only(bottom: 6),
-                        child: ArcFrostedCardSurface(
+                        child: ArcCardSurface(
                           padding: const EdgeInsets.all(10),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -128,7 +126,7 @@ class _ContextAssetsModalState extends State<ContextAssetsModal> {
                   const SizedBox(height: 6),
                   ...assets.map((a) => Padding(
                         padding: const EdgeInsets.only(bottom: 6),
-                        child: ArcFrostedCardSurface(
+                        child: ArcCardSurface(
                           padding: const EdgeInsets.all(10),
                           child: Row(
                             children: [

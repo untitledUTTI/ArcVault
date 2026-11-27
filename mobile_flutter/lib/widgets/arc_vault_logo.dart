@@ -39,28 +39,7 @@ class _ArcVaultLogoPainter extends CustomPainter {
     final rect = Rect.fromLTWH(w * 0.06, h * 0.06, w * 0.88, h * 0.88);
     final rrect = RRect.fromRectAndRadius(rect, Radius.circular(w * 0.28));
 
-    if (themeId == MobileThemeId.liquidGlass) {
-      canvas.drawRRect(
-        rrect,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: tokens.isDark
-                ? const [Color(0x5538BDF8), Color(0x448B5CF6)]
-                : const [Color(0x9993C5FD), Color(0x88F9A8D4)],
-          ).createShader(rect),
-      );
-      canvas.drawRRect(
-        rrect,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.4
-          ..shader = const LinearGradient(
-            colors: [Color(0xCC67E8F9), Color(0xEEFFFFFF), Color(0xCCF472B6)],
-          ).createShader(rect),
-      );
-    } else if (themeId == MobileThemeId.m3Expressive) {
+    if (themeId == MobileThemeId.m3Expressive) {
       canvas.drawRRect(
         rrect,
         Paint()..color = tokens.accentSoft,
@@ -97,7 +76,7 @@ class _ArcVaultLogoPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = w * 0.085
       ..strokeCap = StrokeCap.round
-      ..color = themeId == MobileThemeId.liquidGlass ? Colors.white : tokens.accent;
+      ..color = tokens.accent;
     final outerPath = Path()
       ..moveTo(w * 0.22, h * 0.68)
       ..quadraticBezierTo(w * 0.5, h * 0.16, w * 0.78, h * 0.68);
@@ -108,8 +87,7 @@ class _ArcVaultLogoPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = w * 0.055
       ..strokeCap = StrokeCap.round
-      ..color = (themeId == MobileThemeId.liquidGlass ? Colors.white : tokens.accent)
-          .withValues(alpha: 0.65);
+      ..color = tokens.accent.withValues(alpha: 0.65);
     final innerPath = Path()
       ..moveTo(w * 0.34, h * 0.72)
       ..quadraticBezierTo(w * 0.5, h * 0.36, w * 0.66, h * 0.72);

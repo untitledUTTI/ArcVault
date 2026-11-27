@@ -1,29 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:arcvault_mobile/core/phrasebank_data.dart';
 import 'package:arcvault_mobile/core/tutorial_flow.dart';
 import 'package:arcvault_mobile/models/archive_models.dart';
 import 'package:arcvault_mobile/theme/arc_theme.dart';
 
 void main() {
   group('Mobile Themes & Live Spotlight Tutorial Flow', () {
-    test('maps deprecated desktop themes to liquid-glass and keeps 5 mobile themes', () {
-      expect(TutorialFlow.mobileWelcomeThemes.length, 5);
-      expect(MobileThemeId.fromWire('celestial-optics'), MobileThemeId.liquidGlass);
-      expect(MobileThemeId.fromWire('weather-live'), MobileThemeId.liquidGlass);
-      expect(MobileThemeId.fromWire('liquid-glass'), MobileThemeId.liquidGlass);
-    });
-
-    test('LiquidGlassSettingsModel presets and serialization round-trip', () {
-      final preset = LiquidGlassSettingsModel.fromPreset(
-        LiquidGlassPreset.crystal,
-        isDark: true,
-        previewBarEnabled: true,
-      );
-      final roundTrip = LiquidGlassSettingsModel.fromJson(preset.toJson());
-      expect(roundTrip.isDark, true);
-      expect(roundTrip.previewBarEnabled, true);
-      expect(roundTrip.blur, 6.0);
-      expect(roundTrip.thickness, 28.0);
+    test('maps deprecated desktop/removed themes to light and keeps 4 mobile themes', () {
+      expect(TutorialFlow.mobileWelcomeThemes.length, 4);
+      expect(MobileThemeId.fromWire('celestial-optics'), MobileThemeId.light);
+      expect(MobileThemeId.fromWire('weather-live'), MobileThemeId.light);
+      expect(MobileThemeId.fromWire('liquid-glass'), MobileThemeId.light);
     });
 
     test('immersive status bar keeps bar visible (transparent bg, contrasting icons)', () {
@@ -33,14 +21,11 @@ void main() {
       expect(lightTokens.systemUiOverlayStyle.statusBarColor, Colors.transparent);
       expect(lightTokens.systemUiOverlayStyle.statusBarIconBrightness, Brightness.dark);
 
-      final darkGlass = ArcThemeTokens.fromSettings(
-        const AppSettingsModel(
-          theme: MobileThemeId.liquidGlass,
-          liquidGlass: LiquidGlassSettingsModel(isDark: true),
-        ),
+      final darkTokens = ArcThemeTokens.fromSettings(
+        const AppSettingsModel(theme: MobileThemeId.dark),
       );
-      expect(darkGlass.systemUiOverlayStyle.statusBarColor, Colors.transparent);
-      expect(darkGlass.systemUiOverlayStyle.statusBarIconBrightness, Brightness.light);
+      expect(darkTokens.systemUiOverlayStyle.statusBarColor, Colors.transparent);
+      expect(darkTokens.systemUiOverlayStyle.statusBarIconBrightness, Brightness.light);
     });
 
     test('initial phase and Android permissions gating align with desktop', () {
@@ -244,6 +229,36 @@ void main() {
       expect(TutorialFlow.canConfirmWarning(remainingSeconds: 5, input: '我已了解'), false);
       expect(TutorialFlow.canConfirmWarning(remainingSeconds: 0, input: '了解'), false);
       expect(TutorialFlow.canConfirmWarning(remainingSeconds: 0, input: '  我已了解  '), true);
+    });
+
+    test('quickBarWidthFraction clamps and round-trips through JSON', () {
+      final s = const AppSettingsModel().copyWith(quickBarWidthFraction: 0.72);
+      final rt = AppSettingsModel.fromJson(s.toJson());
+      expect(rt.quickBarWidthFraction, closeTo(0.72, 0.001));
+
+      final clampedLow = s.copyWith(quickBarWidthFraction: 0.1);
+      expect(clampedLow.quickBarWidthFraction, 0.55);
+      final clampedHigh = s.copyWith(quickBarWidthFraction: 1.5);
+      expect(clampedHigh.quickBarWidthFraction, 1.0);
+    });
+
+    test('PhrasebankData & PhrasebankAnalyzer detect sections, issues, and placeholders', () {
+      final sections = PhrasebankAnalyzer.detectPaperSections(
+        '# Abstract\nText\n## Introduction\nWe don\'t use a lot of data.',
+      );
+      expect(sections.length, 2);
+      expect(sections[0].mappedSectionId, 'writing-abstracts');
+      expect(sections[1].mappedSectionId, 'introducing-work');
+
+      final issues = PhrasebankAnalyzer.analyzeAcademicIssues("We don't use a lot of data.");
+      expect(issues.any((i) => i.kind == 'contraction'), true);
+      expect(issues.any((i) => i.kind == 'everyday'), true);
+
+      const ph = PlaceholderValues(x: 'ArcVault', y: 'archiving', author: 'Zhang', year: '2025');
+      expect(
+        ph.apply('Smith (2020) showed X improves Y.'),
+        'Zhang (2025) showed ArcVault improves archiving.',
+      );
     });
   });
 }

@@ -7,7 +7,6 @@ import '../../core/tutorial_flow.dart';
 import '../../models/archive_models.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
-import '../../theme/liquid_glass_surface.dart';
 
 class SyncModal extends StatefulWidget {
   const SyncModal({super.key, required this.controller, this.onClose});
@@ -48,9 +47,8 @@ class _SyncModalState extends State<SyncModal> {
       deviceName: sync.deviceName,
     );
 
-    return ArcLiquidGlassSurface(
+    return ArcSurface(
       key: c.tourTargets.keyFor(TutorialTargetId.syncModal),
-      liquidGlassSettings: s.liquidGlass,
       borderRadius: 24,
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.82,
@@ -100,7 +98,7 @@ class _SyncModalState extends State<SyncModal> {
                   ),
                   const SizedBox(height: 12),
                   if (sync.mode == SyncMode.lan) ...[
-                    ArcFrostedCardSurface(
+                    ArcCardSurface(
                       padding: const EdgeInsets.all(12),
                       child: Column(
                         children: [

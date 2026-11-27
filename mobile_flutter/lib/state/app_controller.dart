@@ -1069,17 +1069,6 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Liquid Glass custom wallpaper picker
-  Future<void> pickLiquidGlassWallpaper() async {
-    final picker = ImagePicker();
-    final xfile = await picker.pickImage(source: ImageSource.gallery, maxWidth: 2048);
-    if (xfile == null) return;
-    await updateSettings(_settings.copyWith(
-      liquidGlass: _settings.liquidGlass.copyWith(customWallpaperPath: xfile.path),
-    ));
-    showToast(_settings.locale.isZh ? '已设置液态玻璃自定义壁纸' : 'Updated Liquid Glass wallpaper');
-  }
-
   // Share & Camera Scan Intake
   void ingestTextDocument({required String title, required String body, List<String> tags = const ['分享入库']}) {
     final id = 'doc_in_${const Uuid().v4().substring(0, 8)}';

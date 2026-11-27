@@ -3,7 +3,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/tutorial_flow.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
-import '../../theme/liquid_glass_surface.dart';
 
 class EvolutionStudioModal extends StatefulWidget {
   const EvolutionStudioModal({super.key, required this.controller, this.onClose});
@@ -28,9 +27,8 @@ class _EvolutionStudioModalState extends State<EvolutionStudioModal> {
     final activeSnap = snaps.isNotEmpty ? snaps[clampedIdx] : null;
     final snapText = activeSnap != null ? (c.cas.get(activeSnap.contentHash) ?? '') : '';
 
-    return ArcLiquidGlassSurface(
+    return ArcSurface(
       key: c.tourTargets.keyFor(TutorialTargetId.evolutionStudioModal),
-      liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.78,
@@ -103,7 +101,7 @@ class _EvolutionStudioModalState extends State<EvolutionStudioModal> {
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: t.accent),
                     ),
                     const SizedBox(height: 8),
-                    ArcFrostedCardSurface(
+                    ArcCardSurface(
                       padding: const EdgeInsets.all(12),
                       child: Text(
                         snapText,

@@ -12,7 +12,6 @@ import '../../i18n/dictionaries.dart';
 import '../../models/archive_models.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
-import '../../theme/liquid_glass_surface.dart';
 import '../../theme/monet_engine.dart';
 import '../arc_vault_logo.dart';
 
@@ -58,106 +57,77 @@ class _SettingsModalState extends State<SettingsModal> {
     final isZh = s.locale.isZh;
     final mq = MediaQuery.of(context);
 
-    // STRICT SCOPE: Only show preview dock inside Settings -> Appearance when Liquid Glass
-    // is active and the preview switch is enabled.
-    final showLiquidPreviewDock = _tab == SettingsTab.appearance &&
-        s.theme == MobileThemeId.liquidGlass &&
-        s.liquidGlass.previewBarEnabled;
-
     return Scaffold(
       key: c.tourTargets.keyFor(TutorialTargetId.settingsModal),
-      backgroundColor: Colors.transparent,
-      body: Stack(
+      backgroundColor: t.bgApp,
+      body: Column(
         children: [
-          if (t.isLiquidGlass)
-            Positioned.fill(
-              child: ArcLiquidGlassBackdrop(settings: s.liquidGlass),
-            )
-          else
-            Positioned.fill(child: Container(color: t.bgApp)),
-          Column(
-            children: [
-              // Immersive Top Header
-              Container(
-                padding: EdgeInsets.fromLTRB(12, mq.padding.top + 8, 8, 10),
-                decoration: BoxDecoration(
-                  color: t.isLiquidGlass ? t.bgSurface.withValues(alpha: 0.45) : t.bgSurface,
-                  border: Border(bottom: BorderSide(color: t.borderSubtle)),
-                ),
-                child: Row(
-                  children: [
-                    ArcVaultLogo(size: 24, themeId: s.theme),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        d.settingsTitle,
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w700, color: t.textPrimary),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => (widget.onClose ?? () => Navigator.of(context).pop())(),
-                      child: Text(d.done, style: TextStyle(color: t.accent, fontWeight: FontWeight.w700)),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Horizontal Tab Bar
-              Container(
-                height: 46,
-                decoration: BoxDecoration(
-                  color: t.isLiquidGlass ? t.bgSurface.withValues(alpha: 0.32) : t.bgSurface,
-                  border: Border(bottom: BorderSide(color: t.borderSubtle)),
-                ),
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  children: [
-                    _tabChip(SettingsTab.appearance, LucideIcons.palette, isZh ? '外观与主题' : 'Themes'),
-                    _tabChip(SettingsTab.typography, LucideIcons.type, isZh ? '字体排版' : 'Typography'),
-                    _tabChip(SettingsTab.archive, LucideIcons.folderCog, isZh ? '目录与归档' : 'Archive'),
-                    _tabChip(SettingsTab.device, LucideIcons.smartphone, isZh ? '触控与多端' : 'Touch & Sync'),
-                    _tabChip(SettingsTab.ai, LucideIcons.cpu, isZh ? 'AI 与 Skills' : 'AI & Skills'),
-                    _tabChip(SettingsTab.about, LucideIcons.info, isZh ? '关于穹档' : 'About'),
-                  ],
-                ),
-              ),
-
-              // Body Content
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.fromLTRB(
-                    14,
-                    14,
-                    14,
-                    (showLiquidPreviewDock ? 96 : 24) + mq.padding.bottom,
+          // Immersive Top Header
+          Container(
+            padding: EdgeInsets.fromLTRB(12, mq.padding.top + 8, 8, 10),
+            decoration: BoxDecoration(
+              color: t.bgSurface,
+              border: Border(bottom: BorderSide(color: t.borderSubtle)),
+            ),
+            child: Row(
+              children: [
+                ArcVaultLogo(size: 24, themeId: s.theme),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    d.settingsTitle,
+                    style: TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w700, color: t.textPrimary),
                   ),
-                  children: [
-                    if (_tab == SettingsTab.appearance) ..._buildAppearanceTab(c, s, d, t, isZh),
-                    if (_tab == SettingsTab.typography) ..._buildTypographyTab(c, s, t, isZh),
-                    if (_tab == SettingsTab.archive) ..._buildArchiveTab(c, s, t, isZh),
-                    if (_tab == SettingsTab.device) ..._buildDeviceTab(c, s, t, isZh),
-                    if (_tab == SettingsTab.ai) ..._buildAiTab(c, s, t, isZh),
-                    if (_tab == SettingsTab.about) ..._buildAboutTab(t, isZh),
-                  ],
                 ),
-              ),
-            ],
+                TextButton(
+                  onPressed: () => (widget.onClose ?? () => Navigator.of(context).pop())(),
+                  child: Text(d.done, style: TextStyle(color: t.accent, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
           ),
 
-          // Preview Liquid Glass Bottom Dock (ONLY inside Settings -> Appearance!)
-          if (showLiquidPreviewDock)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: mq.padding.bottom + 12,
-              child: LiquidGlassPreviewDock(
-                settings: s.liquidGlass,
-                isZh: isZh,
-                onTapTab: () => c.triggerHaptic(HapticPattern.selection),
-              ),
+          // Horizontal Tab Bar
+          Container(
+            height: 46,
+            decoration: BoxDecoration(
+              color: t.bgSurface,
+              border: Border(bottom: BorderSide(color: t.borderSubtle)),
             ),
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              children: [
+                _tabChip(SettingsTab.appearance, LucideIcons.palette, isZh ? '外观与主题' : 'Themes'),
+                _tabChip(SettingsTab.typography, LucideIcons.type, isZh ? '字体排版' : 'Typography'),
+                _tabChip(SettingsTab.archive, LucideIcons.folderCog, isZh ? '目录与归档' : 'Archive'),
+                _tabChip(SettingsTab.device, LucideIcons.smartphone, isZh ? '触控与多端' : 'Touch & Sync'),
+                _tabChip(SettingsTab.ai, LucideIcons.cpu, isZh ? 'AI 与 Skills' : 'AI & Skills'),
+                _tabChip(SettingsTab.about, LucideIcons.info, isZh ? '关于穹档' : 'About'),
+              ],
+            ),
+          ),
+
+          // Body Content
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(
+                14,
+                14,
+                14,
+                24 + mq.padding.bottom,
+              ),
+              children: [
+                if (_tab == SettingsTab.appearance) ..._buildAppearanceTab(c, s, d, t, isZh),
+                if (_tab == SettingsTab.typography) ..._buildTypographyTab(c, s, t, isZh),
+                if (_tab == SettingsTab.archive) ..._buildArchiveTab(c, s, t, isZh),
+                if (_tab == SettingsTab.device) ..._buildDeviceTab(c, s, t, isZh),
+                if (_tab == SettingsTab.ai) ..._buildAiTab(c, s, t, isZh),
+                if (_tab == SettingsTab.about) ..._buildAboutTab(t, isZh),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -213,11 +183,10 @@ class _SettingsModalState extends State<SettingsModal> {
       MobileThemeId.dark,
       MobileThemeId.paper,
       MobileThemeId.m3Expressive,
-      MobileThemeId.liquidGlass,
     ];
 
     return [
-      ArcFrostedCardSurface(
+      ArcCardSurface(
         key: c.tourTargets.keyFor(TutorialTargetId.settingsThemesCard),
         padding: const EdgeInsets.all(14),
         child: Column(
@@ -227,7 +196,7 @@ class _SettingsModalState extends State<SettingsModal> {
               children: [
                 Expanded(
                   child: Text(
-                    isZh ? '预设界面主题（5 套移动引擎）' : 'Mobile Interface Themes (5)',
+                    isZh ? '预设界面主题（4 套移动引擎）' : 'Mobile Interface Themes (4)',
                     style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: t.textPrimary),
                   ),
                 ),
@@ -262,7 +231,6 @@ class _SettingsModalState extends State<SettingsModal> {
                       children: [
                         _ThemeSwatchWidget(
                           themeId: id,
-                          isLiquidDark: s.liquidGlass.isDark,
                           monetSeed: MonetEngine.parseHexArgb(s.monet.seedColor),
                         ),
                         const SizedBox(width: 12),
@@ -297,212 +265,10 @@ class _SettingsModalState extends State<SettingsModal> {
         ),
       ),
 
-      // Liquid Glass Theme Console
-      if (s.theme == MobileThemeId.liquidGlass) ...[
-        const SizedBox(height: 12),
-        ArcFrostedCardSurface(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(LucideIcons.droplets, size: 16, color: t.accent),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      isZh ? '液态玻璃光学引擎控制台' : 'Liquid Glass Optical Console',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: t.textPrimary),
-                    ),
-                  ),
-                  Switch(
-                    value: s.liquidGlass.isDark,
-                    onChanged: (v) => c.updateSettings(
-                      s.copyWith(liquidGlass: s.liquidGlass.copyWith(isDark: v)),
-                    ),
-                  ),
-                  Text(s.liquidGlass.isDark ? (isZh ? '深色' : 'Dark') : (isZh ? '浅色' : 'Light'),
-                      style: TextStyle(fontSize: 11.5, color: t.textSecondary)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              // Preview Bottom Bar Toggle
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: t.accentSoft,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: t.accent.withValues(alpha: 0.35)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(LucideIcons.panelBottom, size: 15, color: t.accent),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isZh ? '液态玻璃预览底栏开关' : 'Preview Floating Dock',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 12.5, color: t.textPrimary),
-                          ),
-                          Text(
-                            isZh
-                                ? '开启后仅在当前「外观与主题」下方悬浮绘制，实时观察调参折射'
-                                : 'Shown only below this Appearance page to inspect glass tuning live',
-                            style: TextStyle(fontSize: 11, color: t.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: s.liquidGlass.previewBarEnabled,
-                      onChanged: (v) {
-                        c.triggerHaptic(HapticPattern.selection);
-                        c.updateSettings(
-                          s.copyWith(liquidGlass: s.liquidGlass.copyWith(previewBarEnabled: v)),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              // Presets
-              Text(isZh ? '一键质感预设' : 'Quick Optical Presets',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: t.textSecondary)),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                children: [
-                  _presetBtn(c, s, LiquidGlassPreset.crystal, isZh ? '通透水晶' : 'Crystal'),
-                  _presetBtn(c, s, LiquidGlassPreset.frosted, isZh ? '细沙磨砂' : 'Frosted'),
-                  _presetBtn(c, s, LiquidGlassPreset.soft, isZh ? '柔和清透' : 'Soft'),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Backdrop & Custom Wallpaper
-              Text(isZh ? '流动渐变底景 / 自定义壁纸' : 'Flowing Backdrop & Wallpaper',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: t.textSecondary)),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  for (final bp in LiquidGlassBackdropPreset.values)
-                    ChoiceChip(
-                      label: Text(_backdropLabel(bp, isZh), style: const TextStyle(fontSize: 11.5)),
-                      selected: s.liquidGlass.customWallpaperPath == null &&
-                          s.liquidGlass.backdropPreset == bp,
-                      onSelected: (_) => c.updateSettings(s.copyWith(
-                        liquidGlass:
-                            s.liquidGlass.copyWith(backdropPreset: bp, clearWallpaper: true),
-                      )),
-                    ),
-                  ActionChip(
-                    avatar: const Icon(LucideIcons.imagePlus, size: 14),
-                    label: Text(isZh ? '导入自定义壁纸' : 'Custom Wallpaper',
-                        style: const TextStyle(fontSize: 11.5)),
-                    onPressed: c.pickLiquidGlassWallpaper,
-                  ),
-                  if (s.liquidGlass.customWallpaperPath != null)
-                    ActionChip(
-                      avatar: const Icon(LucideIcons.x, size: 14),
-                      label: Text(isZh ? '清除壁纸' : 'Clear', style: const TextStyle(fontSize: 11.5)),
-                      onPressed: () => c.updateSettings(s.copyWith(
-                        liquidGlass: s.liquidGlass.copyWith(clearWallpaper: true),
-                      )),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Parameter Sliders
-              _sliderRow(
-                label: isZh ? '背景模糊度 (Blur)' : 'Blur',
-                valueLabel: s.liquidGlass.blur.toStringAsFixed(1),
-                value: s.liquidGlass.blur,
-                min: 0,
-                max: 28,
-                onChanged: (v) => c.updateSettings(
-                  s.copyWith(liquidGlass: s.liquidGlass.copyWith(blur: v)),
-                ),
-              ),
-              _sliderRow(
-                label: isZh ? '折射厚度 (Thickness)' : 'Refraction Thickness',
-                valueLabel: s.liquidGlass.thickness.toStringAsFixed(1),
-                value: s.liquidGlass.thickness,
-                min: 6,
-                max: 45,
-                onChanged: (v) => c.updateSettings(
-                  s.copyWith(liquidGlass: s.liquidGlass.copyWith(thickness: v)),
-                ),
-              ),
-              _sliderRow(
-                label: isZh ? '边缘色散强度 (Dispersion)' : 'Chromatic Dispersion',
-                valueLabel: s.liquidGlass.chromaticAberration.toStringAsFixed(3),
-                value: s.liquidGlass.chromaticAberration,
-                min: 0,
-                max: 0.04,
-                onChanged: (v) => c.updateSettings(
-                  s.copyWith(liquidGlass: s.liquidGlass.copyWith(chromaticAberration: v)),
-                ),
-              ),
-              _sliderRow(
-                label: isZh ? '玻璃着色透明度 (Tint Opacity)' : 'Tint Opacity',
-                valueLabel: '${(s.liquidGlass.tintOpacity * 100).round()}%',
-                value: s.liquidGlass.tintOpacity,
-                min: 0.04,
-                max: 0.55,
-                onChanged: (v) => c.updateSettings(
-                  s.copyWith(liquidGlass: s.liquidGlass.copyWith(tintOpacity: v)),
-                ),
-              ),
-              _sliderRow(
-                label: isZh ? '色彩饱和度 (Saturation)' : 'Saturation',
-                valueLabel: '${(s.liquidGlass.saturation * 100).round()}%',
-                value: s.liquidGlass.saturation,
-                min: 0.6,
-                max: 1.8,
-                onChanged: (v) => c.updateSettings(
-                  s.copyWith(liquidGlass: s.liquidGlass.copyWith(saturation: v)),
-                ),
-              ),
-              _sliderRow(
-                label: isZh ? '高光反射强度 (Light Intensity)' : 'Highlight Intensity',
-                valueLabel: s.liquidGlass.lightIntensity.toStringAsFixed(2),
-                value: s.liquidGlass.lightIntensity,
-                min: 0,
-                max: 1.5,
-                onChanged: (v) => c.updateSettings(
-                  s.copyWith(liquidGlass: s.liquidGlass.copyWith(lightIntensity: v)),
-                ),
-              ),
-              SwitchListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  isZh ? '兼容 / 省电降级渲染模式' : 'Compatibility / Eco Fallback Mode',
-                  style: TextStyle(fontSize: 12.5, color: t.textPrimary),
-                ),
-                subtitle: Text(
-                  isZh ? '低端机型或非 Impeller 环境可开启以降低 GPU 开销' : 'Lower GPU load on older devices',
-                  style: TextStyle(fontSize: 11, color: t.textMuted),
-                ),
-                value: s.liquidGlass.compatibilityMode,
-                onChanged: (v) => c.updateSettings(
-                  s.copyWith(liquidGlass: s.liquidGlass.copyWith(compatibilityMode: v)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-
       // Monet Console for M3 Expressive
       if (s.theme == MobileThemeId.m3Expressive) ...[
         const SizedBox(height: 12),
-        ArcFrostedCardSurface(
+        ArcCardSurface(
           padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -581,39 +347,6 @@ class _SettingsModalState extends State<SettingsModal> {
     ];
   }
 
-  Widget _presetBtn(AppController c, AppSettingsModel s, LiquidGlassPreset preset, String label) {
-    return OutlinedButton(
-      onPressed: () {
-        c.triggerHaptic(HapticPattern.selection);
-        c.updateSettings(s.copyWith(
-          liquidGlass: LiquidGlassSettingsModel.fromPreset(
-            preset,
-            isDark: s.liquidGlass.isDark,
-            backdropPreset: s.liquidGlass.backdropPreset,
-            customWallpaperPath: s.liquidGlass.customWallpaperPath,
-            compatibilityMode: s.liquidGlass.compatibilityMode,
-            previewBarEnabled: s.liquidGlass.previewBarEnabled,
-          ),
-        ));
-      },
-      style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-      child: Text(label, style: const TextStyle(fontSize: 12)),
-    );
-  }
-
-  String _backdropLabel(LiquidGlassBackdropPreset bp, bool isZh) {
-    switch (bp) {
-      case LiquidGlassBackdropPreset.auroraMist:
-        return isZh ? '极光蓝紫' : 'Aurora Mist';
-      case LiquidGlassBackdropPreset.prismDusk:
-        return isZh ? '暮色棱镜' : 'Prism Dusk';
-      case LiquidGlassBackdropPreset.oceanSilk:
-        return isZh ? '碧海流光' : 'Ocean Silk';
-      case LiquidGlassBackdropPreset.warmAmber:
-        return isZh ? '暖阳琥珀' : 'Warm Amber';
-    }
-  }
-
   Future<void> _pickWallpaperSeedForMonet(AppController c, AppSettingsModel s) async {
     final xfile = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 256);
     if (xfile == null) return;
@@ -642,7 +375,7 @@ class _SettingsModalState extends State<SettingsModal> {
 
   List<Widget> _buildTypographyTab(AppController c, AppSettingsModel s, ArcThemeTokens t, bool isZh) {
     return [
-      ArcFrostedCardSurface(
+      ArcCardSurface(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -692,7 +425,7 @@ class _SettingsModalState extends State<SettingsModal> {
 
   List<Widget> _buildArchiveTab(AppController c, AppSettingsModel s, ArcThemeTokens t, bool isZh) {
     return [
-      ArcFrostedCardSurface(
+      ArcCardSurface(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -741,11 +474,24 @@ class _SettingsModalState extends State<SettingsModal> {
 
   List<Widget> _buildDeviceTab(AppController c, AppSettingsModel s, ArcThemeTokens t, bool isZh) {
     return [
-      ArcFrostedCardSurface(
+      ArcCardSurface(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(isZh ? '底部快捷功能栏' : 'Bottom Quick Format Bar',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: t.textPrimary)),
+            _sliderRow(
+              label: isZh ? '功能栏宽度比例（也可直接拖拽栏边缘调节）' : 'Bar Width Ratio (or drag bar edges)',
+              valueLabel: '${(s.quickBarWidthFraction * 100).round()}%',
+              value: s.quickBarWidthFraction,
+              min: 0.55,
+              max: 1.0,
+              onChanged: (v) => c.updateSettings(
+                s.copyWith(quickBarWidthFraction: v),
+              ),
+            ),
+            const Divider(height: 22),
             Text(isZh ? 'TouchScrollScrubber 触控滚动手柄' : 'TouchScrollScrubber Handle',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: t.textPrimary)),
             _sliderRow(
@@ -821,7 +567,7 @@ class _SettingsModalState extends State<SettingsModal> {
 
   List<Widget> _buildAiTab(AppController c, AppSettingsModel s, ArcThemeTokens t, bool isZh) {
     return [
-      ArcFrostedCardSurface(
+      ArcCardSurface(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -915,7 +661,7 @@ class _SettingsModalState extends State<SettingsModal> {
         ),
       ),
       const SizedBox(height: 12),
-      ArcFrostedCardSurface(
+      ArcCardSurface(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -944,7 +690,7 @@ class _SettingsModalState extends State<SettingsModal> {
 
   List<Widget> _buildAboutTab(ArcThemeTokens t, bool isZh) {
     return [
-      ArcFrostedCardSurface(
+      ArcCardSurface(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1029,20 +775,14 @@ class _SettingsModalState extends State<SettingsModal> {
 class _ThemeSwatchWidget extends StatelessWidget {
   const _ThemeSwatchWidget({
     required this.themeId,
-    required this.isLiquidDark,
     required this.monetSeed,
   });
 
   final MobileThemeId themeId;
-  final bool isLiquidDark;
   final int monetSeed;
 
   @override
   Widget build(BuildContext context) {
-    if (themeId == MobileThemeId.liquidGlass) {
-      return LiquidGlassThemePreviewSwatch(isDark: isLiquidDark);
-    }
-
     final Color bg;
     final Color side;
     final Color accent;
@@ -1063,10 +803,6 @@ class _ThemeSwatchWidget extends StatelessWidget {
         bg = const Color(0xFFF4EFFA);
         side = const Color(0xFFFDFBFF);
         accent = Color(monetSeed);
-      case MobileThemeId.liquidGlass:
-        bg = Colors.transparent;
-        side = Colors.transparent;
-        accent = Colors.blue;
     }
 
     return Container(

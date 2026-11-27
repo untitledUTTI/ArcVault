@@ -6,7 +6,6 @@ import '../i18n/dictionaries.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
 import '../theme/arc_theme.dart';
-import '../theme/liquid_glass_surface.dart';
 import 'arc_vault_logo.dart';
 
 class TopBar extends StatelessWidget {
@@ -54,7 +53,7 @@ class TopBar extends StatelessWidget {
 
     final barContent = Padding(
       padding: EdgeInsets.only(
-        top: layout.topPadding + (t.isLiquidGlass ? 6 : 4),
+        top: layout.topPadding + 4,
         left: 10,
         right: 10,
         bottom: 8,
@@ -250,17 +249,6 @@ class TopBar extends StatelessWidget {
         ],
       ),
     );
-
-    if (t.isLiquidGlass) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: ArcLiquidGlassSurface(
-          liquidGlassSettings: s.liquidGlass,
-          borderRadius: 22,
-          child: barContent,
-        ),
-      );
-    }
 
     // Immersive status bar integration: TopBar surface extends seamlessly under status bar!
     return Container(

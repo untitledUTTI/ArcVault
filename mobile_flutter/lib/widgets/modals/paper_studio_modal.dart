@@ -4,7 +4,6 @@ import '../../core/academic_engines.dart';
 import '../../core/tutorial_flow.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
-import '../../theme/liquid_glass_surface.dart';
 
 class PaperStudioModal extends StatefulWidget {
   const PaperStudioModal({super.key, required this.controller, this.onClose});
@@ -38,9 +37,8 @@ class _PaperStudioModalState extends State<PaperStudioModal> {
         ? const []
         : ConsistencyChecker.runCheck(doc.activeText, citationsSidecar: doc.citationsSidecar);
 
-    return ArcLiquidGlassSurface(
+    return ArcSurface(
       key: c.tourTargets.keyFor(TutorialTargetId.paperStudioModal),
-      liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.8,
@@ -89,14 +87,14 @@ class _PaperStudioModalState extends State<PaperStudioModal> {
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (context, idx) {
                         if (issues.isEmpty) {
-                          return ArcFrostedCardSurface(
+                          return ArcCardSurface(
                             padding: const EdgeInsets.all(14),
                             child: Text(isZh ? '未检测到跨章节数值或引文一致性问题！' : 'No consistency issues found!',
                                 style: TextStyle(color: t.accent, fontWeight: FontWeight.w600)),
                           );
                         }
                         final issue = issues[idx];
-                        return ArcFrostedCardSurface(
+                        return ArcCardSurface(
                           padding: const EdgeInsets.all(12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,7 +157,7 @@ class _PaperStudioModalState extends State<PaperStudioModal> {
                         ),
                         if (_rebuttalDraft != null) ...[
                           const SizedBox(height: 12),
-                          ArcFrostedCardSurface(
+                          ArcCardSurface(
                             padding: const EdgeInsets.all(12),
                             child: SelectableText(_rebuttalDraft!, style: TextStyle(fontSize: 12.5, color: t.textPrimary)),
                           ),

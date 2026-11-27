@@ -46,7 +46,6 @@ class ArcThemeTokens extends ThemeExtension<ArcThemeTokens> {
   final Color commentColor;
   final Color revisionColor;
 
-  bool get isLiquidGlass => themeId == MobileThemeId.liquidGlass;
   bool get isM3 => themeId == MobileThemeId.m3Expressive;
 
   /// Immersive status bar & gesture navigation bar overlay style (visible, never hidden).
@@ -169,53 +168,6 @@ class ArcThemeTokens extends ThemeExtension<ArcThemeTokens> {
           commentColor: commentColor,
           revisionColor: revisionColor,
         );
-
-      case MobileThemeId.liquidGlass:
-        final lgDark = settings.liquidGlass.isDark;
-        if (lgDark) {
-          return ArcThemeTokens(
-            themeId: MobileThemeId.liquidGlass,
-            isDark: true,
-            bgApp: Colors.transparent,
-            bgSurface: const Color(0xCC111829),
-            bgElevated: const Color(0xDF162038),
-            bgSubtle: const Color(0x9E203052),
-            bgHover: const Color(0xB82B3F6B),
-            borderSubtle: const Color(0x38D4E6FF),
-            borderStrong: const Color(0x6693C5FD),
-            textPrimary: const Color(0xFFF3F7FF),
-            textSecondary: const Color(0xFFC8DAF5),
-            textMuted: const Color(0xFF8FA8CE),
-            accent: const Color(0xFF7DD3FC),
-            accentSoft: const Color(0x2E7DD3FC),
-            accentText: const Color(0xFF071526),
-            radius: 20,
-            radiusSm: 14,
-            commentColor: commentColor,
-            revisionColor: revisionColor,
-          );
-        }
-        return ArcThemeTokens(
-          themeId: MobileThemeId.liquidGlass,
-          isDark: false,
-          bgApp: Colors.transparent,
-          bgSurface: const Color(0xC7FFFFFF),
-          bgElevated: const Color(0xE8FFFFFF),
-          bgSubtle: const Color(0x94EEF4FF),
-          bgHover: const Color(0xBAE1ECFF),
-          borderSubtle: const Color(0x99FFFFFF),
-          borderStrong: const Color(0xCC93C5FD),
-          textPrimary: const Color(0xFF101828),
-          textSecondary: const Color(0xFF3E4C63),
-          textMuted: const Color(0xFF6B7B94),
-          accent: const Color(0xFF2563EB),
-          accentSoft: const Color(0x242563EB),
-          accentText: const Color(0xFFFFFFFF),
-          radius: 20,
-          radiusSm: 14,
-          commentColor: commentColor,
-          revisionColor: revisionColor,
-        );
     }
   }
 
@@ -234,7 +186,7 @@ class ArcThemeTokens extends ThemeExtension<ArcThemeTokens> {
       useMaterial3: true,
       brightness: isDark ? Brightness.dark : Brightness.light,
       colorScheme: scheme,
-      scaffoldBackgroundColor: isLiquidGlass ? Colors.transparent : bgApp,
+      scaffoldBackgroundColor: bgApp,
       cardColor: bgSurface,
       dividerColor: borderSubtle,
       extensions: [this],
@@ -297,4 +249,81 @@ extension ArcThemeContextExt on BuildContext {
   ArcThemeTokens get arcTheme =>
       Theme.of(this).extension<ArcThemeTokens>() ??
       ArcThemeTokens.fromSettings(const AppSettingsModel());
+}
+
+/// Clean elevated surface for floating overlays, modals, sheets, and bars.
+class ArcSurface extends StatelessWidget {
+  const ArcSurface({
+    super.key,
+    required this.child,
+    this.borderRadius = 20,
+    this.padding,
+    this.color,
+    this.borderColor,
+  });
+
+  final Widget child;
+  final double borderRadius;
+  final EdgeInsetsGeometry? padding;
+  final Color? color;
+  final Color? borderColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.arcTheme;
+    final content = padding != null ? Padding(padding: padding!, child: child) : child;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: color ?? tokens.bgElevated,
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(color: borderColor ?? tokens.borderSubtle),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: tokens.isDark ? 0.28 : 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: content,
+      ),
+    );
+  }
+}
+
+/// Clean card surface for list items, settings cards, and annotations.
+class ArcCardSurface extends StatelessWidget {
+  const ArcCardSurface({
+    super.key,
+    required this.child,
+    this.borderRadius,
+    this.padding,
+    this.isActive = false,
+  });
+
+  final Widget child;
+  final double? borderRadius;
+  final EdgeInsetsGeometry? padding;
+  final bool isActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.arcTheme;
+    final r = borderRadius ?? t.radiusSm;
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: isActive ? t.accentSoft : t.bgSurface,
+        borderRadius: BorderRadius.circular(r),
+        border: Border.all(
+          color: isActive ? t.accent : t.borderSubtle,
+          width: isActive ? 1.4 : 1.0,
+        ),
+      ),
+      child: child,
+    );
+  }
 }

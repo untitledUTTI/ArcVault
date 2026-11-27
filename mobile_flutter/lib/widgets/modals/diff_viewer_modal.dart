@@ -5,7 +5,6 @@ import '../../core/tutorial_flow.dart';
 import '../../models/archive_models.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
-import '../../theme/liquid_glass_surface.dart';
 
 class DiffViewerModal extends StatefulWidget {
   const DiffViewerModal({
@@ -43,9 +42,8 @@ class _DiffViewerModalState extends State<DiffViewerModal> {
     final diff = computeDocumentDiff(leftText, rightText);
     final darlings = doc != null ? c.darlingsForDoc(doc.id) : const <DeletedDarling>[];
 
-    return ArcLiquidGlassSurface(
+    return ArcSurface(
       key: c.tourTargets.keyFor(TutorialTargetId.diffModal),
-      liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.8,
@@ -99,7 +97,7 @@ class _DiffViewerModalState extends State<DiffViewerModal> {
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (context, idx) {
                         final dl = darlings[idx];
-                        return ArcFrostedCardSurface(
+                        return ArcCardSurface(
                           padding: const EdgeInsets.all(12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,

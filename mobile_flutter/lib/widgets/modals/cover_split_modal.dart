@@ -5,7 +5,6 @@ import '../../core/ooxml_engine.dart';
 import '../../core/tutorial_flow.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
-import '../../theme/liquid_glass_surface.dart';
 
 class CoverSplitModal extends StatefulWidget {
   const CoverSplitModal({super.key, required this.controller, this.onClose});
@@ -44,8 +43,7 @@ class _CoverSplitModalState extends State<CoverSplitModal> {
     final c = widget.controller;
     final isZh = c.settings.locale.isZh;
 
-    return ArcLiquidGlassSurface(
-      liquidGlassSettings: c.settings.liquidGlass,
+    return ArcSurface(
       borderRadius: 24,
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.78,

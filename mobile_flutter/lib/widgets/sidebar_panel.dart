@@ -5,7 +5,6 @@ import '../i18n/dictionaries.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
 import '../theme/arc_theme.dart';
-import '../theme/liquid_glass_surface.dart';
 
 class SidebarPanel extends StatelessWidget {
   const SidebarPanel({
@@ -274,7 +273,7 @@ class SidebarPanel extends StatelessWidget {
                         onCloseDrawer?.call();
                       },
                       borderRadius: BorderRadius.circular(t.radiusSm),
-                      child: ArcFrostedCardSurface(
+                      child: ArcCardSurface(
                         isActive: active,
                         padding: const EdgeInsets.all(10),
                         child: Column(
@@ -418,11 +417,10 @@ class SidebarPanel extends StatelessWidget {
     );
 
     if (isDrawer) {
-      return ArcLiquidGlassSurface(
+      return ArcSurface(
         key: controller.tourTargets.keyFor(TutorialTargetId.sidebarPanel),
-        liquidGlassSettings: s.liquidGlass,
         borderRadius: 22,
-        fallbackColor: t.bgSurface,
+        color: t.bgSurface,
         child: SafeArea(left: true, top: true, bottom: true, right: false, child: inner),
       );
     }
@@ -430,7 +428,7 @@ class SidebarPanel extends StatelessWidget {
     return Container(
       key: controller.tourTargets.keyFor(TutorialTargetId.sidebarPanel),
       decoration: BoxDecoration(
-        color: t.isLiquidGlass ? t.bgSurface.withValues(alpha: 0.55) : t.bgSurface,
+        color: t.bgSurface,
         border: Border(right: BorderSide(color: t.borderSubtle)),
       ),
       child: inner,

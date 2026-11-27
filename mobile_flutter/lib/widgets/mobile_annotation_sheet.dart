@@ -6,7 +6,6 @@ import '../i18n/dictionaries.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
 import '../theme/arc_theme.dart';
-import '../theme/liquid_glass_surface.dart';
 
 class MobileAnnotationSheet extends StatefulWidget {
   const MobileAnnotationSheet({
@@ -73,9 +72,8 @@ class _MobileAnnotationSheetState extends State<MobileAnnotationSheet> {
       child: Container(
         constraints: BoxConstraints(maxHeight: maxH),
         margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-        child: ArcLiquidGlassSurface(
+        child: ArcSurface(
           key: c.tourTargets.keyFor(TutorialTargetId.mobileAnnotationSheet),
-          liquidGlassSettings: s.liquidGlass,
           borderRadius: 24,
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
           child: Column(
@@ -283,7 +281,7 @@ class _MobileAnnotationSheetState extends State<MobileAnnotationSheet> {
                         ),
                         if (_aiPreviewText != null) ...[
                           const SizedBox(height: 8),
-                          ArcFrostedCardSurface(
+                          ArcCardSurface(
                             padding: const EdgeInsets.all(10),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,

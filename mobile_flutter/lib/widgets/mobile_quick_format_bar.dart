@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../models/archive_models.dart';
 import '../theme/arc_theme.dart';
-import '../theme/liquid_glass_surface.dart';
 
-class MobileQuickFormatBar extends StatelessWidget {
+class MobileQuickFormatBar extends StatefulWidget {
   const MobileQuickFormatBar({
     super.key,
     this.barKey,
@@ -18,7 +17,8 @@ class MobileQuickFormatBar extends StatelessWidget {
     required this.canRedo,
     required this.openAnnotationCount,
     required this.phrasebankActive,
-    required this.liquidGlassSettings,
+    this.widthFraction = 1.0,
+    this.onWidthFractionChanged,
     required this.onUndo,
     required this.onRedo,
     required this.onInsertSnippet,
@@ -42,7 +42,8 @@ class MobileQuickFormatBar extends StatelessWidget {
   final bool canRedo;
   final int openAnnotationCount;
   final bool phrasebankActive;
-  final LiquidGlassSettingsModel liquidGlassSettings;
+  final double widthFraction;
+  final ValueChanged<double>? onWidthFractionChanged;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
   final void Function(String snippet) onInsertSnippet;
@@ -55,139 +56,258 @@ class MobileQuickFormatBar extends StatelessWidget {
   final void Function(HapticPattern) onHaptic;
 
   @override
+  State<MobileQuickFormatBar> createState() => _MobileQuickFormatBarState();
+}
+
+class _MobileQuickFormatBarState extends State<MobileQuickFormatBar> {
+  double? _dragFraction;
+  bool _dragging = false;
+
+  @override
   Widget build(BuildContext context) {
     final t = context.arcTheme;
+    final activeFraction = (_dragFraction ?? widget.widthFraction).clamp(0.55, 1.0);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
-      child: ArcLiquidGlassSurface(
-        key: barKey,
-        liquidGlassSettings: liquidGlassSettings,
-        borderRadius: 24,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: SingleChildScrollView(
-          controller: scrollController,
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _IconQuickBtn(
-                icon: LucideIcons.undo2,
-                enabled: canUndo && !readOnly,
-                onTap: () {
-                  onHaptic(HapticPattern.light);
-                  onUndo();
-                },
-              ),
-              _IconQuickBtn(
-                icon: LucideIcons.redo2,
-                enabled: canRedo && !readOnly,
-                onTap: () {
-                  onHaptic(HapticPattern.light);
-                  onRedo();
-                },
-              ),
-              _Sep(color: t.borderSubtle),
-              _MonoQuickBtn(
-                label: 'B',
-                enabled: !readOnly,
-                onTap: () {
-                  onHaptic(HapticPattern.selection);
-                  onInsertSnippet(isZh ? '**粗体**' : '**bold**');
-                },
-              ),
-              _MonoQuickBtn(
-                label: r'$',
-                enabled: !readOnly,
-                onTap: () {
-                  onHaptic(HapticPattern.selection);
-                  onInsertSnippet(r'$x$');
-                },
-              ),
-              _MonoQuickBtn(
-                label: r'$$',
-                enabled: !readOnly,
-                onTap: () {
-                  onHaptic(HapticPattern.selection);
-                  onInsertSnippet('\n\$\$\nE = mc^2\n\$\$\n');
-                },
-              ),
-              _MonoQuickBtn(
-                label: '#',
-                enabled: !readOnly,
-                onTap: () {
-                  onHaptic(HapticPattern.selection);
-                  onInsertSnippet(activeFormat == EditorFormat.latex ? r'\section{}' : '## ');
-                },
-              ),
-              _MonoQuickBtn(
-                label: '>',
-                enabled: !readOnly,
-                onTap: () {
-                  onHaptic(HapticPattern.selection);
-                  onInsertSnippet('> ');
-                },
-              ),
-              _Sep(color: t.borderSubtle),
-              _PillBtn(
-                label: activeFormat == EditorFormat.markdown ? 'MD' : 'LaTeX',
-                onTap: () {
-                  onHaptic(HapticPattern.selection);
-                  onToggleFormat();
-                },
-              ),
-              const SizedBox(width: 6),
-              _PillBtn(
-                icon: splitPreview ? LucideIcons.eyeOff : LucideIcons.eye,
-                label: splitPreview ? (isZh ? '编辑' : 'Edit') : (isZh ? '预览' : 'Preview'),
-                active: splitPreview,
-                onTap: () {
-                  onHaptic(HapticPattern.selection);
-                  onToggleSplitPreview();
-                },
-              ),
-              const SizedBox(width: 6),
-              _PillBtn(
-                icon: LucideIcons.messageSquare,
-                label: isZh ? '批注' : 'Notes',
-                badgeCount: openAnnotationCount,
-                onTap: () {
-                  onHaptic(HapticPattern.light);
-                  onOpenAnnotations();
-                },
-              ),
-              const SizedBox(width: 6),
-              _PillBtn(
-                icon: LucideIcons.graduationCap,
-                label: isZh ? '句库' : 'Phrases',
-                active: phrasebankActive,
-                onTap: () {
-                  onHaptic(HapticPattern.light);
-                  onTogglePhrasebank();
-                },
-              ),
-              const SizedBox(width: 6),
-              _PillBtn(
-                icon: LucideIcons.camera,
-                label: isZh ? '扫描' : 'Scan',
-                onTap: () {
-                  onHaptic(HapticPattern.light);
-                  onOpenCameraScan();
-                },
-              ),
-              const SizedBox(width: 6),
-              KeyedSubtree(
-                key: snapshotBtnKey,
-                child: _PillBtn(
-                  icon: LucideIcons.bookmarkPlus,
-                  label: isZh ? '快照' : 'Snap',
-                  primary: true,
-                  onTap: () {
-                    onHaptic(HapticPattern.success);
-                    onSaveMilestone();
-                  },
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxAvailable = (constraints.maxWidth - 20).clamp(220.0, double.infinity);
+        final barWidth = (maxAvailable * activeFraction).clamp(220.0, maxAvailable);
+
+        void handleEdgeDrag(double deltaPx) {
+          final next = ((_dragFraction ?? widget.widthFraction) + deltaPx / maxAvailable)
+              .clamp(0.55, 1.0);
+          setState(() => _dragFraction = next);
+        }
+
+        void finishDrag() {
+          final finalVal = (_dragFraction ?? widget.widthFraction).clamp(0.55, 1.0);
+          setState(() {
+            _dragging = false;
+            _dragFraction = null;
+          });
+          widget.onWidthFractionChanged?.call(finalVal);
+        }
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+          child: Center(
+            child: SizedBox(
+              width: barWidth,
+              child: ArcSurface(
+                key: widget.barKey,
+                borderRadius: 24,
+                borderColor: _dragging ? t.accent : null,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                child: Row(
+                  children: [
+                    _WidthDragHandle(
+                      color: _dragging ? t.accent : t.textMuted.withValues(alpha: 0.45),
+                      tooltip: widget.isZh ? '拖拽调节底栏宽度（双击恢复）' : 'Drag to resize (double-tap reset)',
+                      onDragStart: () {
+                        widget.onHaptic(HapticPattern.selection);
+                        setState(() => _dragging = true);
+                      },
+                      onDragDelta: (dx) => handleEdgeDrag(-dx * 2),
+                      onDragEnd: finishDrag,
+                      onDoubleTap: () {
+                        widget.onHaptic(HapticPattern.selection);
+                        widget.onWidthFractionChanged?.call(1.0);
+                      },
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: widget.scrollController,
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _IconQuickBtn(
+                              icon: LucideIcons.undo2,
+                              enabled: widget.canUndo && !widget.readOnly,
+                              onTap: () {
+                                widget.onHaptic(HapticPattern.light);
+                                widget.onUndo();
+                              },
+                            ),
+                            _IconQuickBtn(
+                              icon: LucideIcons.redo2,
+                              enabled: widget.canRedo && !widget.readOnly,
+                              onTap: () {
+                                widget.onHaptic(HapticPattern.light);
+                                widget.onRedo();
+                              },
+                            ),
+                            _Sep(color: t.borderSubtle),
+                            _MonoQuickBtn(
+                              label: 'B',
+                              enabled: !widget.readOnly,
+                              onTap: () {
+                                widget.onHaptic(HapticPattern.selection);
+                                widget.onInsertSnippet(widget.isZh ? '**粗体**' : '**bold**');
+                              },
+                            ),
+                            _MonoQuickBtn(
+                              label: r'$',
+                              enabled: !widget.readOnly,
+                              onTap: () {
+                                widget.onHaptic(HapticPattern.selection);
+                                widget.onInsertSnippet(r'$x$');
+                              },
+                            ),
+                            _MonoQuickBtn(
+                              label: r'$$',
+                              enabled: !widget.readOnly,
+                              onTap: () {
+                                widget.onHaptic(HapticPattern.selection);
+                                widget.onInsertSnippet('\n\$\$\nE = mc^2\n\$\$\n');
+                              },
+                            ),
+                            _MonoQuickBtn(
+                              label: '#',
+                              enabled: !widget.readOnly,
+                              onTap: () {
+                                widget.onHaptic(HapticPattern.selection);
+                                widget.onInsertSnippet(
+                                    widget.activeFormat == EditorFormat.latex ? r'\section{}' : '## ');
+                              },
+                            ),
+                            _MonoQuickBtn(
+                              label: '>',
+                              enabled: !widget.readOnly,
+                              onTap: () {
+                                widget.onHaptic(HapticPattern.selection);
+                                widget.onInsertSnippet('> ');
+                              },
+                            ),
+                            _Sep(color: t.borderSubtle),
+                            _PillBtn(
+                              label: widget.activeFormat == EditorFormat.markdown ? 'MD' : 'LaTeX',
+                              onTap: () {
+                                widget.onHaptic(HapticPattern.selection);
+                                widget.onToggleFormat();
+                              },
+                            ),
+                            const SizedBox(width: 6),
+                            _PillBtn(
+                              icon: widget.splitPreview ? LucideIcons.eyeOff : LucideIcons.eye,
+                              label: widget.splitPreview
+                                  ? (widget.isZh ? '编辑' : 'Edit')
+                                  : (widget.isZh ? '预览' : 'Preview'),
+                              active: widget.splitPreview,
+                              onTap: () {
+                                widget.onHaptic(HapticPattern.selection);
+                                widget.onToggleSplitPreview();
+                              },
+                            ),
+                            const SizedBox(width: 6),
+                            _PillBtn(
+                              icon: LucideIcons.messageSquare,
+                              label: widget.isZh ? '批注' : 'Notes',
+                              badgeCount: widget.openAnnotationCount,
+                              onTap: () {
+                                widget.onHaptic(HapticPattern.light);
+                                widget.onOpenAnnotations();
+                              },
+                            ),
+                            const SizedBox(width: 6),
+                            _PillBtn(
+                              icon: LucideIcons.graduationCap,
+                              label: widget.isZh ? '句库' : 'Phrases',
+                              active: widget.phrasebankActive,
+                              onTap: () {
+                                widget.onHaptic(HapticPattern.light);
+                                widget.onTogglePhrasebank();
+                              },
+                            ),
+                            const SizedBox(width: 6),
+                            _PillBtn(
+                              icon: LucideIcons.camera,
+                              label: widget.isZh ? '扫描' : 'Scan',
+                              onTap: () {
+                                widget.onHaptic(HapticPattern.light);
+                                widget.onOpenCameraScan();
+                              },
+                            ),
+                            const SizedBox(width: 6),
+                            KeyedSubtree(
+                              key: widget.snapshotBtnKey,
+                              child: _PillBtn(
+                                icon: LucideIcons.bookmarkPlus,
+                                label: widget.isZh ? '快照' : 'Snap',
+                                primary: true,
+                                onTap: () {
+                                  widget.onHaptic(HapticPattern.success);
+                                  widget.onSaveMilestone();
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    _WidthDragHandle(
+                      color: _dragging ? t.accent : t.textMuted.withValues(alpha: 0.45),
+                      tooltip: widget.isZh ? '拖拽调节底栏宽度（双击恢复）' : 'Drag to resize (double-tap reset)',
+                      onDragStart: () {
+                        widget.onHaptic(HapticPattern.selection);
+                        setState(() => _dragging = true);
+                      },
+                      onDragDelta: (dx) => handleEdgeDrag(dx * 2),
+                      onDragEnd: finishDrag,
+                      onDoubleTap: () {
+                        widget.onHaptic(HapticPattern.selection);
+                        widget.onWidthFractionChanged?.call(1.0);
+                      },
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _WidthDragHandle extends StatelessWidget {
+  const _WidthDragHandle({
+    required this.color,
+    required this.tooltip,
+    required this.onDragStart,
+    required this.onDragDelta,
+    required this.onDragEnd,
+    required this.onDoubleTap,
+  });
+
+  final Color color;
+  final String tooltip;
+  final VoidCallback onDragStart;
+  final ValueChanged<double> onDragDelta;
+  final VoidCallback onDragEnd;
+  final VoidCallback onDoubleTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: (_) => onDragStart(),
+        onHorizontalDragUpdate: (d) => onDragDelta(d.delta.dx),
+        onHorizontalDragEnd: (_) => onDragEnd(),
+        onDoubleTap: onDoubleTap,
+        child: SizedBox(
+          width: 14,
+          height: 34,
+          child: Center(
+            child: Container(
+              width: 3,
+              height: 16,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
           ),
         ),
       ),
@@ -281,7 +401,7 @@ class _PillBtn extends StatelessWidget {
         ? t.accent
         : active
             ? t.accentSoft
-            : t.bgSubtle.withValues(alpha: t.isLiquidGlass ? 0.55 : 0.9);
+            : t.bgSubtle.withValues(alpha: 0.9);
     final fg = primary
         ? t.accentText
         : active

@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/archive_models.dart';
 import '../theme/arc_theme.dart';
-import '../theme/liquid_glass_surface.dart';
 
 class ScrubberHeading {
   const ScrubberHeading({required this.title, required this.level, required this.ratio});
@@ -17,14 +16,12 @@ class TouchScrollScrubber extends StatefulWidget {
     required this.scrollController,
     required this.documentText,
     required this.scrubberSettings,
-    required this.liquidGlassSettings,
     required this.onHaptic,
   });
 
   final ScrollController scrollController;
   final String documentText;
   final ScrollScrubberSettingsModel scrubberSettings;
-  final LiquidGlassSettingsModel liquidGlassSettings;
   final void Function(HapticPattern) onHaptic;
 
   static ScrollScrubberShape resolveShape(MobileThemeId theme, ScrollScrubberShape override) {
@@ -36,7 +33,6 @@ class TouchScrollScrubber extends StatefulWidget {
       case MobileThemeId.paper:
         return ScrollScrubberShape.squircle;
       case MobileThemeId.dark:
-      case MobileThemeId.liquidGlass:
         return ScrollScrubberShape.orb;
     }
   }
@@ -168,8 +164,7 @@ class _TouchScrollScrubberState extends State<TouchScrollScrubber> {
                 Positioned(
                   right: handleSize + 14,
                   top: (top - 4).clamp(8.0, math.max(8.0, trackH - 44)),
-                  child: ArcLiquidGlassSurface(
-                    liquidGlassSettings: widget.liquidGlassSettings,
+                  child: ArcSurface(
                     borderRadius: 12,
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     child: Row(

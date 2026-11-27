@@ -26,8 +26,6 @@ class ArcStrings {
         return isZh ? '护眼纸感' : 'Warm Paper';
       case MobileThemeId.m3Expressive:
         return 'Material 3 Expressive';
-      case MobileThemeId.liquidGlass:
-        return isZh ? '液态玻璃 · Liquid Glass' : 'Liquid Glass';
     }
   }
 
@@ -41,10 +39,6 @@ class ArcStrings {
         return isZh ? '暖米纸墨质感，长文精读舒适' : 'Warm parchment tone for long reading sessions';
       case MobileThemeId.m3Expressive:
         return isZh ? '柔紫灵动色阶与莫奈动态取色' : 'Expressive tonal palette with Monet dynamic color';
-      case MobileThemeId.liquidGlass:
-        return isZh
-            ? '通透流体玻璃折射、高光描边与实时参数定制'
-            : 'Fluid glass refraction, specular rim highlights & live tuning';
     }
   }
 

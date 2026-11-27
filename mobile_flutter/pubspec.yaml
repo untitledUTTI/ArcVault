@@ -13,9 +13,6 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  # Liquid Glass (whynotmake-it/flutter_liquid_glass)
-  liquid_glass_renderer: 0.2.0-dev.4
-
   # Material 3 Expressive Monet Engine (HCT & Dynamic Schemes)
   material_color_utilities: ^0.13.0
 

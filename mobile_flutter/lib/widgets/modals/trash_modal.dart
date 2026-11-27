@@ -4,7 +4,6 @@ import '../../core/tutorial_flow.dart';
 import '../../i18n/dictionaries.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
-import '../../theme/liquid_glass_surface.dart';
 
 class TrashModal extends StatefulWidget {
   const TrashModal({super.key, required this.controller, this.onClose});
@@ -30,9 +29,8 @@ class _TrashModalState extends State<TrashModal> {
       return doc.title.toLowerCase().contains(q) || doc.markdownText.toLowerCase().contains(q);
     }).toList();
 
-    return ArcLiquidGlassSurface(
+    return ArcSurface(
       key: c.tourTargets.keyFor(TutorialTargetId.trashModal),
-      liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.78,
@@ -113,7 +111,7 @@ class _TrashModalState extends State<TrashModal> {
                       itemBuilder: (context, idx) {
                         final doc = items[idx];
                         final expanded = _expandedId == doc.id;
-                        return ArcFrostedCardSurface(
+                        return ArcCardSurface(
                           padding: const EdgeInsets.all(12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,

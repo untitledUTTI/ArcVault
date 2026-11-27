@@ -15,7 +15,7 @@ enum TutorialModuleId {
   versionDome('version-dome', '版本穹顶、Diff 与 A/B 分支', '版本分支', '版本演进'),
   academicAi('academic-ai', '学术科研套件与三档 AI 隐私锁', '学术 AI', '智能辅助'),
   syncSecurity('sync-security', '保险箱加密与跨端同步', '同步安全', '多端互联'),
-  themesMultidevice('themes-multidevice', '五套移动主题、液态玻璃与导出', '主题导出', '界面交付'),
+  themesMultidevice('themes-multidevice', '四套移动主题与导出', '主题导出', '界面交付'),
   formatMatrix('format-matrix', '不同格式文件的支持能力差异', '格式支持', '格式说明'),
   limitations('limitations', '当前版本不能做到的事（能力边界）', '能力边界', '必读说明');
 
@@ -301,7 +301,6 @@ class TutorialFlow {
     MobileThemeId.dark,
     MobileThemeId.paper,
     MobileThemeId.m3Expressive,
-    MobileThemeId.liquidGlass,
   ];
 
   static TutorialPhase getInitialPhase(TutorialMode mode) =>
@@ -669,14 +668,14 @@ class TutorialFlow {
     ),
     TutorialModuleDef(
       id: TutorialModuleId.themesMultidevice,
-      summary: '配备五套动态与护眼移动主题（含全新液态玻璃引擎），支持全参数调校与带封面 Word 导出。',
+      summary: '配备四套动态与护眼移动主题（含 Material 3 Expressive 莫奈引擎），支持全参数调校与带封面 Word 导出。',
       steps: [
         TutorialSpotlightStep(
           id: 'theme-cards',
           moduleId: TutorialModuleId.themesMultidevice,
-          title: '五套移动主题与「液态玻璃」定制引擎',
+          title: '四套移动主题与莫奈动态取色引擎',
           description:
-              '已为你打开设置中心的「外观与主题」页面！点击高亮区域里的任意主题（浅色极简、深邃夜色、护眼纸感、M3 莫奈动态取色、液态玻璃），整个界面与沉浸状态栏都会实时焕然一新；选中液态玻璃还可调节模糊、折射厚度与壁纸！',
+              '已为你打开设置中心的「外观与主题」页面！点击高亮区域里的任意主题（浅色极简、深邃夜色、护眼纸感、M3 莫奈动态取色），整个界面与沉浸状态栏都会实时焕然一新。',
           scene: TutorialSceneId.settingsThemes,
           targetIds: [TutorialTargetId.settingsThemesCard],
           preferredPlacement: SpotlightPlacement.bottom,

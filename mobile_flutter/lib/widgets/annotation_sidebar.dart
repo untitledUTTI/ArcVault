@@ -5,7 +5,6 @@ import '../i18n/dictionaries.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
 import '../theme/arc_theme.dart';
-import '../theme/liquid_glass_surface.dart';
 
 class AnnotationSidebar extends StatelessWidget {
   const AnnotationSidebar({super.key, required this.controller});
@@ -22,7 +21,7 @@ class AnnotationSidebar extends StatelessWidget {
     return Container(
       key: controller.tourTargets.keyFor(TutorialTargetId.annotationSidebar),
       decoration: BoxDecoration(
-        color: t.isLiquidGlass ? t.bgSurface.withValues(alpha: 0.55) : t.bgSurface,
+        color: t.bgSurface,
         border: Border(left: BorderSide(color: t.borderSubtle)),
       ),
       child: Column(
@@ -64,7 +63,7 @@ class AnnotationSidebar extends StatelessWidget {
                           controller.notifyTutorialAction(TutorialActionId.selectAnnotation);
                         },
                         borderRadius: BorderRadius.circular(t.radiusSm),
-                        child: ArcFrostedCardSurface(
+                        child: ArcCardSurface(
                           isActive: selected,
                           padding: const EdgeInsets.all(10),
                           child: Column(

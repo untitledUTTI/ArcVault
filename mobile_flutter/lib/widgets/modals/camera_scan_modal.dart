@@ -9,7 +9,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
-import '../../theme/liquid_glass_surface.dart';
 
 enum ScanFilterMode { original, documentCrisp, bwScan, warmPaper }
 
@@ -72,8 +71,7 @@ class _CameraScanModalState extends State<CameraScanModal> {
     final c = widget.controller;
     final isZh = c.settings.locale.isZh;
 
-    return ArcLiquidGlassSurface(
-      liquidGlassSettings: c.settings.liquidGlass,
+    return ArcSurface(
       borderRadius: 24,
       padding: const EdgeInsets.all(16),
       child: SingleChildScrollView(

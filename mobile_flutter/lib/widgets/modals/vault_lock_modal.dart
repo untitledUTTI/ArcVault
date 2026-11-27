@@ -4,7 +4,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/tutorial_flow.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
-import '../../theme/liquid_glass_surface.dart';
 
 class VaultLockModal extends StatefulWidget {
   const VaultLockModal({super.key, required this.controller, this.onClose});
@@ -32,9 +31,8 @@ class _VaultLockModalState extends State<VaultLockModal> {
     final isZh = c.settings.locale.isZh;
     final unlocked = c.vaultUnlocked;
 
-    return ArcLiquidGlassSurface(
+    return ArcSurface(
       key: c.tourTargets.keyFor(TutorialTargetId.vaultLockModal),
-      liquidGlassSettings: c.settings.liquidGlass,
       borderRadius: 24,
       padding: const EdgeInsets.all(18),
       child: Column(

@@ -7,7 +7,6 @@ import '../i18n/dictionaries.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
 import '../theme/arc_theme.dart';
-import '../theme/liquid_glass_surface.dart';
 
 class TimelinePanel extends StatefulWidget {
   const TimelinePanel({
@@ -168,7 +167,7 @@ class _TimelinePanelState extends State<TimelinePanel> {
                     final picked = _selectedForDiff.any((s) => s.id == snap.id);
                     return SizedBox(
                       width: 185,
-                      child: ArcFrostedCardSurface(
+                      child: ArcCardSurface(
                         isActive: picked,
                         padding: const EdgeInsets.all(10),
                         child: Column(
@@ -250,9 +249,8 @@ class _TimelinePanelState extends State<TimelinePanel> {
     );
 
     if (widget.isModalSheet) {
-      return ArcLiquidGlassSurface(
+      return ArcSurface(
         key: c.tourTargets.keyFor(TutorialTargetId.timelinePanel),
-        liquidGlassSettings: c.settings.liquidGlass,
         borderRadius: 24,
         child: body,
       );
@@ -261,7 +259,7 @@ class _TimelinePanelState extends State<TimelinePanel> {
     return Container(
       key: c.tourTargets.keyFor(TutorialTargetId.timelinePanel),
       decoration: BoxDecoration(
-        color: t.isLiquidGlass ? t.bgSurface.withValues(alpha: 0.55) : t.bgSurface,
+        color: t.bgSurface,
         border: Border(top: BorderSide(color: t.borderSubtle)),
       ),
       child: body,

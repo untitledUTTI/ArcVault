@@ -12,7 +12,6 @@ import '../../i18n/dictionaries.dart';
 import '../../models/archive_models.dart';
 import '../../state/app_controller.dart';
 import '../../theme/arc_theme.dart';
-import '../../theme/liquid_glass_surface.dart';
 import '../arc_vault_logo.dart';
 
 class TutorialOverlay extends StatefulWidget {
@@ -375,18 +374,14 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
         color: Colors.transparent,
         child: Stack(
           children: [
-            if (t.isLiquidGlass)
-              Positioned.fill(child: ArcLiquidGlassBackdrop(settings: s.liquidGlass))
-            else
-              Positioned.fill(child: Container(color: t.bgApp)),
+            Positioned.fill(child: Container(color: t.bgApp)),
             SafeArea(
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 640),
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
-                    child: ArcLiquidGlassSurface(
-                      liquidGlassSettings: s.liquidGlass,
+                    child: ArcSurface(
                       borderRadius: 24,
                       padding: const EdgeInsets.all(20),
                       child: child,
@@ -431,8 +426,7 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
                       14,
                       MediaQuery.viewInsetsOf(context).bottom + 14,
                     ),
-                    child: ArcLiquidGlassSurface(
-                      liquidGlassSettings: c.settings.liquidGlass,
+                    child: ArcSurface(
                       borderRadius: 24,
                       padding: const EdgeInsets.all(18),
                       child: child,
@@ -514,11 +508,6 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (id == MobileThemeId.liquidGlass) ...[
-                      LiquidGlassThemePreviewSwatch(
-                          width: 24, height: 18, isDark: s.liquidGlass.isDark),
-                      const SizedBox(width: 6),
-                    ],
                     Text(
                       d.themeName(id),
                       style: TextStyle(
@@ -536,7 +525,7 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
         const SizedBox(height: 16),
         ...d.welcomeHighlights.map((h) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: ArcFrostedCardSurface(
+              child: ArcCardSurface(
                 padding: const EdgeInsets.all(10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -634,7 +623,7 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
             child: InkWell(
               onTap: granted ? null : () => _requestPermission(card),
               borderRadius: BorderRadius.circular(12),
-              child: ArcFrostedCardSurface(
+              child: ArcCardSurface(
                 isActive: granted,
                 padding: const EdgeInsets.all(11),
                 child: Row(
@@ -849,7 +838,7 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
                 });
               },
               borderRadius: BorderRadius.circular(12),
-              child: ArcFrostedCardSurface(
+              child: ArcCardSurface(
                 isActive: checked,
                 padding: const EdgeInsets.all(10),
                 child: Column(
@@ -1024,7 +1013,7 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
           ],
         ),
         const SizedBox(height: 10),
-        ArcFrostedCardSurface(
+        ArcCardSurface(
           padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1048,7 +1037,7 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
           ),
         ),
         const SizedBox(height: 12),
-        ArcFrostedCardSurface(
+        ArcCardSurface(
           isActive: _cacheChoice == 'custom',
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -1138,7 +1127,7 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
             });
           },
           borderRadius: BorderRadius.circular(12),
-          child: ArcFrostedCardSurface(
+          child: ArcCardSurface(
             isActive: _cacheChoice == 'default',
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
@@ -1451,7 +1440,7 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
                   right: 0,
                   height: cRect.height,
                 ),
-              // Glowing highlight ring around interactive cutout (non-blocking)
+              // Glowing highlight ring around interactive cutout (non-blocking, transparent interior)
               Positioned(
                 top: cRect.top,
                 left: cRect.left,
@@ -1460,13 +1449,15 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
                 child: IgnorePointer(
                   child: Container(
                     decoration: BoxDecoration(
+                      color: Colors.transparent,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: t.accent, width: 2.2),
+                      border: Border.all(color: t.accent, width: 2.4),
                       boxShadow: [
                         BoxShadow(
                           color: t.accent.withValues(alpha: 0.42),
-                          blurRadius: 14,
+                          blurRadius: 12,
                           spreadRadius: 1,
+                          blurStyle: BlurStyle.outer,
                         ),
                       ],
                     ),
@@ -1495,11 +1486,10 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
                                   24)
                               .clamp(200.0, 520.0),
                         ),
-                  child: ArcLiquidGlassSurface(
-                    liquidGlassSettings: c.settings.liquidGlass,
+                  child: ArcSurface(
                     borderRadius: 20,
                     padding: const EdgeInsets.all(14),
-                    fallbackColor: t.bgElevated,
+                    color: t.bgElevated,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,

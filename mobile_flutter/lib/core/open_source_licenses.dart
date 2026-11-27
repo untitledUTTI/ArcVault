@@ -32,16 +32,6 @@ const List<OpenSourceProjectItem> kOpenSourceProjects = [
     url: 'https://flutter.dev/',
   ),
   OpenSourceProjectItem(
-    id: 'liquid_glass_renderer',
-    name: 'liquid_glass_renderer (whynotmake-it/flutter_liquid_glass)',
-    author: 'whynotmake.it Contributors',
-    license: 'Apache-2.0',
-    category: 'flutter',
-    descriptionZh: '基于 Impeller Fragment Shader 的实时液态玻璃折射、高光描边与模糊渲染引擎。',
-    descriptionEn: 'Impeller Fragment Shader renderer powering real-time liquid glass refraction and blur.',
-    url: 'https://github.com/whynotmake-it/flutter_liquid_glass',
-  ),
-  OpenSourceProjectItem(
     id: 'material_color_utilities',
     name: 'Material Color Utilities',
     author: 'Google / Material Foundation',

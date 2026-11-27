@@ -6,7 +6,6 @@ import '../core/tutorial_flow.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
 import '../theme/arc_theme.dart';
-import '../theme/liquid_glass_surface.dart';
 import '../widgets/annotation_sidebar.dart';
 import '../widgets/editor_workspace.dart';
 import '../widgets/mobile_annotation_sheet.dart';
@@ -53,11 +52,20 @@ class WorkspaceShell extends StatefulWidget {
   State<WorkspaceShell> createState() => _WorkspaceShellState();
 }
 
-class _WorkspaceShellState extends State<WorkspaceShell> {
+class _WorkspaceShellState extends State<WorkspaceShell> with SingleTickerProviderStateMixin {
   final GlobalKey _tourRootKey = GlobalKey();
   final ScrollController _quickFormatScroll = ScrollController();
 
   bool _drawerOpen = false;
+  late final AnimationController _drawerAnim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+  );
+  late final Animation<double> _drawerCurve = CurvedAnimation(
+    parent: _drawerAnim,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
   bool _annotationSheetOpen = false;
   bool _timelineCollapsed = false;
   double _leftSidebarWidth = 264;
@@ -70,8 +78,19 @@ class _WorkspaceShellState extends State<WorkspaceShell> {
   Snapshot? _inlineDiffRight;
   bool _inlineDiffDarlingsTab = false;
 
+  void _setDrawerOpen(bool open) {
+    if (_drawerOpen == open) return;
+    setState(() => _drawerOpen = open);
+    if (open) {
+      _drawerAnim.forward();
+    } else {
+      _drawerAnim.reverse();
+    }
+  }
+
   @override
   void dispose() {
+    _drawerAnim.dispose();
     _quickFormatScroll.dispose();
     super.dispose();
   }
@@ -258,6 +277,11 @@ class _WorkspaceShellState extends State<WorkspaceShell> {
           break;
       }
     });
+    if (_drawerOpen) {
+      _drawerAnim.forward();
+    } else {
+      _drawerAnim.reverse();
+    }
   }
 
   void _scrollQuickBarTo({required double fraction}) {
@@ -281,6 +305,7 @@ class _WorkspaceShellState extends State<WorkspaceShell> {
       _drawerOpen = false;
       _annotationSheetOpen = false;
     });
+    _drawerAnim.reverse();
     c.ensureDemoSceneDocument('doc_thesis_demo', 'sp_paper');
     c.setSplitPreview(false);
   }
@@ -328,10 +353,7 @@ class _WorkspaceShellState extends State<WorkspaceShell> {
             key: _tourRootKey,
             children: [
               // Full-bleed background extending behind Status Bar & Navigation Gesture Bar
-              if (t.isLiquidGlass)
-                Positioned.fill(child: ArcLiquidGlassBackdrop(settings: s.liquidGlass))
-              else
-                Positioned.fill(child: Container(color: t.bgApp)),
+              Positioned.fill(child: Container(color: t.bgApp)),
 
               // Main Workspace Column
               Column(
@@ -340,7 +362,7 @@ class _WorkspaceShellState extends State<WorkspaceShell> {
                     TopBar(
                       controller: c,
                       layout: layout,
-                      onOpenDrawer: () => setState(() => _drawerOpen = true),
+                      onOpenDrawer: () => _setDrawerOpen(true),
                       onOpenTimelineSheet: () => _openTimelineSheet(context, c),
                       onOpenAnnotationsSheet: () =>
                           setState(() => _annotationSheetOpen = !_annotationSheetOpen),
@@ -408,7 +430,9 @@ class _WorkspaceShellState extends State<WorkspaceShell> {
                             .where((a) => a.status == AnnotationStatus.open)
                             .length,
                         phrasebankActive: s.phrasebank.enabled && !s.phrasebank.dismissed,
-                        liquidGlassSettings: s.liquidGlass,
+                        widthFraction: s.quickBarWidthFraction,
+                        onWidthFractionChanged: (v) =>
+                            c.updateSettings(s.copyWith(quickBarWidthFraction: v)),
                         onUndo: c.undo,
                         onRedo: c.redo,
                         onInsertSnippet: c.insertSnippet,
@@ -441,8 +465,7 @@ class _WorkspaceShellState extends State<WorkspaceShell> {
                 Positioned(
                   top: layout.topPadding + 10,
                   right: 12,
-                  child: ArcLiquidGlassSurface(
-                    liquidGlassSettings: s.liquidGlass,
+                  child: ArcSurface(
                     borderRadius: 18,
                     child: TextButton.icon(
                       onPressed: c.toggleFullscreen,
@@ -475,23 +498,44 @@ class _WorkspaceShellState extends State<WorkspaceShell> {
                   ),
                 ),
 
-              // Left Drawer Backdrop + Panel (Phone & Tablet Portrait)
-              if (layout.isCompact && _drawerOpen) ...[
-                Positioned.fill(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _drawerOpen = false),
-                    child: Container(color: Colors.black.withValues(alpha: 0.35)),
-                  ),
-                ),
-                Positioned(
-                  left: 8,
-                  top: 8,
-                  bottom: 8,
-                  width: (layout.width * 0.82).clamp(260.0, 340.0),
+              // Left Drawer Backdrop + Panel (Phone & Tablet Portrait) with slide+fade animation
+              if (layout.isCompact)
+                AnimatedBuilder(
+                  animation: _drawerCurve,
+                  builder: (context, child) {
+                    final v = _drawerCurve.value;
+                    if (v <= 0.001 && !_drawerOpen) return const SizedBox.shrink();
+                    final drawerW = (layout.width * 0.82).clamp(260.0, 340.0);
+                    return Stack(
+                      children: [
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            ignoring: !_drawerOpen,
+                            child: GestureDetector(
+                              onTap: () => _setDrawerOpen(false),
+                              child: Container(
+                                color: Colors.black.withValues(alpha: 0.35 * v),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: 8 - (1.0 - v) * (drawerW + 24),
+                          top: 8,
+                          bottom: 8,
+                          width: drawerW,
+                          child: Opacity(
+                            opacity: v.clamp(0.0, 1.0),
+                            child: child,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                   child: SidebarPanel(
                     controller: c,
                     isDrawer: true,
-                    onCloseDrawer: () => setState(() => _drawerOpen = false),
+                    onCloseDrawer: () => _setDrawerOpen(false),
                     onImportPicked: () => _handleImportPicked(context, c),
                     onOpenVaultLock: () => _openModalAware(
                       context,
@@ -512,7 +556,6 @@ class _WorkspaceShellState extends State<WorkspaceShell> {
                     onOpenShareIntake: () => _showGlassModal(context, ShareIntakeModal(controller: c)),
                   ),
                 ),
-              ],
 
               // Inline Modal Layer (stays underneath TutorialOverlay during live tutorial)
               if (_inlineModal != null) _buildInlineModalLayer(c, t),
@@ -525,8 +568,7 @@ class _WorkspaceShellState extends State<WorkspaceShell> {
                   right: 24,
                   child: IgnorePointer(
                     child: Center(
-                      child: ArcLiquidGlassSurface(
-                        liquidGlassSettings: s.liquidGlass,
+                      child: ArcSurface(
                         borderRadius: 16,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         child: Text(
