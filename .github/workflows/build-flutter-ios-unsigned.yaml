@@ -49,12 +49,8 @@ jobs:
       # 避坑：如果 Generated.xcconfig 等机器生成文件被误提交，
       # 它们可能包含 Windows 本地路径，导致 pod install 失败。
       # 先删除，让 Flutter 在构建时重新生成。
-      - name: Clean potentially contaminated generated files
-        run: |
-          rm -f ios/Flutter/Generated.xcconfig
-          rm -f ios/Flutter/flutter_export_environment.sh
-          rm -f ios/Runner/GeneratedPluginRegistrant.h
-          rm -f ios/Runner/GeneratedPluginRegistrant.m
+      - name: Prepare Flutter iOS build files
+        run: flutter build ios --release --no-codesign
 
       # 可选但推荐：CI 中使用 --deployment 防止 Podfile.lock 漂移
       - name: Pod install (deterministic)
