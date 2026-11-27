@@ -419,7 +419,7 @@ class SidebarPanel extends StatelessWidget {
     if (isDrawer) {
       return ArcSurface(
         key: controller.tourTargets.keyFor(TutorialTargetId.sidebarPanel),
-        borderRadius: 22,
+        borderRadius: t.sidebarRadius,
         color: t.bgSurface,
         child: SafeArea(left: true, top: true, bottom: true, right: false, child: inner),
       );

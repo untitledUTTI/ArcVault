@@ -35,7 +35,6 @@ class _ContextAssetsModalState extends State<ContextAssetsModal> {
 
     return ArcSurface(
       key: c.tourTargets.keyFor(TutorialTargetId.contextAssetsModal),
-      borderRadius: 24,
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.78,
         child: Column(

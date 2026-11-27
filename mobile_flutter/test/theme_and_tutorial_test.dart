@@ -242,6 +242,24 @@ void main() {
       expect(clampedHigh.quickBarWidthFraction, 1.0);
     });
 
+    test('sidebarCornerRadius and cardCornerRadius clamp, round-trip, and propagate to ArcThemeTokens', () {
+      final s = const AppSettingsModel().copyWith(
+        sidebarCornerRadius: 10.0,
+        cardCornerRadius: 30.0,
+      );
+      final rt = AppSettingsModel.fromJson(s.toJson());
+      expect(rt.sidebarCornerRadius, 10.0);
+      expect(rt.cardCornerRadius, 30.0);
+
+      final tokens = ArcThemeTokens.fromSettings(rt);
+      expect(tokens.sidebarRadius, 10.0);
+      expect(tokens.surfaceRadius, 30.0);
+
+      final clamped = s.copyWith(sidebarCornerRadius: -5.0, cardCornerRadius: 80.0);
+      expect(clamped.sidebarCornerRadius, 0.0);
+      expect(clamped.cardCornerRadius, 36.0);
+    });
+
     test('PhrasebankData & PhrasebankAnalyzer detect sections, issues, and placeholders', () {
       final sections = PhrasebankAnalyzer.detectPaperSections(
         '# Abstract\nText\n## Introduction\nWe don\'t use a lot of data.',

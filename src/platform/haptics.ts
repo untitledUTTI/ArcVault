@@ -58,6 +58,25 @@ export interface HapticTriggerContext {
   forceTest?: boolean;
 }
 
+interface AndroidNativeHapticsBridge {
+  trigger?: (pattern: string, intensity: string) => boolean;
+}
+
+function triggerAndroidNativeHaptic(
+  pattern: HapticPattern,
+  intensity: HapticIntensity,
+): boolean {
+  if (typeof window === 'undefined') return false;
+  const bridge = (window as unknown as { __ARC_ANDROID_HAPTICS__?: AndroidNativeHapticsBridge })
+    .__ARC_ANDROID_HAPTICS__;
+  if (!bridge || typeof bridge.trigger !== 'function') return false;
+  try {
+    return Boolean(bridge.trigger(pattern, intensity));
+  } catch {
+    return false;
+  }
+}
+
 export async function triggerHaptic(
   pattern: HapticPattern,
   ctx?: HapticTriggerContext,
@@ -65,6 +84,10 @@ export async function triggerHaptic(
   const norm = normalizeHapticsSettings(ctx?.settings);
   if (!norm.enabled || norm.intensity === 'off') return false;
   if (!ctx?.forceTest && ctx?.isTouchDevice === false) return false;
+
+  if (triggerAndroidNativeHaptic(pattern, norm.intensity)) {
+    return true;
+  }
 
   if (isTauriRuntime()) {
     const handled = await nativeTriggerHaptic(pattern, norm.intensity);
@@ -102,6 +125,14 @@ export async function testHapticPattern(
       ok: false,
       channel: 'disabled',
       message: '震动反馈当前已关闭，请先启用触感开关或切换为柔和/标准档位。',
+    };
+  }
+
+  if (triggerAndroidNativeHaptic(pattern, norm.intensity)) {
+    return {
+      ok: true,
+      channel: 'tauri',
+      message: `已触发 Android 原生系统触感（${pattern} · ${norm.intensity}）`,
     };
   }
 

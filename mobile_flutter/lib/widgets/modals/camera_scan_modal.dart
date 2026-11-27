@@ -72,7 +72,6 @@ class _CameraScanModalState extends State<CameraScanModal> {
     final isZh = c.settings.locale.isZh;
 
     return ArcSurface(
-      borderRadius: 24,
       padding: const EdgeInsets.all(16),
       child: SingleChildScrollView(
         child: Column(

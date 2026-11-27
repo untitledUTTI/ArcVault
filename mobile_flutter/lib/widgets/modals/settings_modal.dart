@@ -344,6 +344,62 @@ class _SettingsModalState extends State<SettingsModal> {
           ),
         ),
       ],
+      const SizedBox(height: 12),
+      ArcCardSurface(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(LucideIcons.square, size: 16, color: t.accent),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    isZh ? '界面圆角自定义' : 'Custom Corner Radius',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: t.textPrimary),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    c.triggerHaptic(HapticPattern.selection);
+                    c.updateSettings(s.copyWith(
+                      sidebarCornerRadius: 22.0,
+                      cardCornerRadius: 24.0,
+                    ));
+                  },
+                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                  child: Text(
+                    isZh ? '恢复默认' : 'Reset',
+                    style: TextStyle(fontSize: 11.5, color: t.accent),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            _sliderRow(
+              label: isZh ? '侧栏圆角 (px)' : 'Sidebar Radius (px)',
+              valueLabel: '${s.sidebarCornerRadius.round()} px',
+              value: s.sidebarCornerRadius,
+              min: 0,
+              max: 36,
+              onChanged: (v) => c.updateSettings(
+                s.copyWith(sidebarCornerRadius: v.roundToDouble()),
+              ),
+            ),
+            _sliderRow(
+              label: isZh ? '卡片页面圆角（句库/时间轴/弹窗等）' : 'Card Pages Radius (Phrasebank/Timeline/Modals)',
+              valueLabel: '${s.cardCornerRadius.round()} px',
+              value: s.cardCornerRadius,
+              min: 0,
+              max: 36,
+              onChanged: (v) => c.updateSettings(
+                s.copyWith(cardCornerRadius: v.roundToDouble()),
+              ),
+            ),
+          ],
+        ),
+      ),
     ];
   }
 

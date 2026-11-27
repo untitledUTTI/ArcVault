@@ -22,7 +22,6 @@ class MobileAnnotationSheet extends StatefulWidget {
 }
 
 class _MobileAnnotationSheetState extends State<MobileAnnotationSheet> {
-  bool _expanded = false;
   bool _aiLoading = false;
   String? _aiPreviewText;
   bool _aiPreviewError = false;
@@ -51,7 +50,7 @@ class _MobileAnnotationSheetState extends State<MobileAnnotationSheet> {
         ? 0
         : ordered.indexWhere((a) => a.id == c.selectedAnnotationId).clamp(0, ordered.length - 1);
     final current = ordered.isNotEmpty ? ordered[idx] : null;
-    final maxH = MediaQuery.sizeOf(context).height * (_expanded ? 0.78 : 0.48);
+    final maxH = MediaQuery.sizeOf(context).height * 0.54;
 
     return GestureDetector(
       onHorizontalDragEnd: (details) {
@@ -74,7 +73,6 @@ class _MobileAnnotationSheetState extends State<MobileAnnotationSheet> {
         margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
         child: ArcSurface(
           key: c.tourTargets.keyFor(TutorialTargetId.mobileAnnotationSheet),
-          borderRadius: 24,
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -124,15 +122,6 @@ class _MobileAnnotationSheetState extends State<MobileAnnotationSheet> {
                       visualDensity: VisualDensity.compact,
                     ),
                   ],
-                  IconButton(
-                    onPressed: () => setState(() => _expanded = !_expanded),
-                    icon: Icon(
-                      _expanded ? LucideIcons.minimize2 : LucideIcons.maximize2,
-                      size: 15,
-                      color: t.textSecondary,
-                    ),
-                    visualDensity: VisualDensity.compact,
-                  ),
                   IconButton(
                     onPressed: widget.onClose,
                     icon: Icon(LucideIcons.x, size: 16, color: t.textSecondary),

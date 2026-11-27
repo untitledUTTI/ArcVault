@@ -1761,6 +1761,8 @@ class AppSettingsModel {
     this.haptics = const HapticsSettingsModel(),
     this.scrollScrubber = const ScrollScrubberSettingsModel(),
     this.quickBarWidthFraction = 1.0,
+    this.sidebarCornerRadius = 22.0,
+    this.cardCornerRadius = 24.0,
     this.sync = const SyncSettingsModel(),
     this.biometricEnabled = false,
     this.customVaultDir = '',
@@ -1784,6 +1786,8 @@ class AppSettingsModel {
   final HapticsSettingsModel haptics;
   final ScrollScrubberSettingsModel scrollScrubber;
   final double quickBarWidthFraction;
+  final double sidebarCornerRadius;
+  final double cardCornerRadius;
   final SyncSettingsModel sync;
   final bool biometricEnabled;
   final String customVaultDir;
@@ -1807,6 +1811,8 @@ class AppSettingsModel {
     HapticsSettingsModel? haptics,
     ScrollScrubberSettingsModel? scrollScrubber,
     double? quickBarWidthFraction,
+    double? sidebarCornerRadius,
+    double? cardCornerRadius,
     SyncSettingsModel? sync,
     bool? biometricEnabled,
     String? customVaultDir,
@@ -1830,6 +1836,8 @@ class AppSettingsModel {
       haptics: haptics ?? this.haptics,
       scrollScrubber: scrollScrubber ?? this.scrollScrubber,
       quickBarWidthFraction: (quickBarWidthFraction ?? this.quickBarWidthFraction).clamp(0.55, 1.0),
+      sidebarCornerRadius: (sidebarCornerRadius ?? this.sidebarCornerRadius).clamp(0.0, 36.0),
+      cardCornerRadius: (cardCornerRadius ?? this.cardCornerRadius).clamp(0.0, 36.0),
       sync: sync ?? this.sync,
       biometricEnabled: biometricEnabled ?? this.biometricEnabled,
       customVaultDir: customVaultDir ?? this.customVaultDir,
@@ -1855,6 +1863,8 @@ class AppSettingsModel {
         'haptics': haptics.toJson(),
         'scrollScrubber': scrollScrubber.toJson(),
         'quickBarWidthFraction': quickBarWidthFraction,
+        'sidebarCornerRadius': sidebarCornerRadius,
+        'cardCornerRadius': cardCornerRadius,
         'sync': sync.toJson(),
         'biometricEnabled': biometricEnabled,
         'customVaultDir': customVaultDir,
@@ -1899,6 +1909,10 @@ class AppSettingsModel {
       ),
       quickBarWidthFraction:
           (json['quickBarWidthFraction'] as num?)?.toDouble().clamp(0.55, 1.0) ?? 1.0,
+      sidebarCornerRadius:
+          (json['sidebarCornerRadius'] as num?)?.toDouble().clamp(0.0, 36.0) ?? 22.0,
+      cardCornerRadius:
+          (json['cardCornerRadius'] as num?)?.toDouble().clamp(0.0, 36.0) ?? 24.0,
       sync: SyncSettingsModel.fromJson(
         json['sync'] is Map ? Map<String, dynamic>.from(json['sync'] as Map) : null,
       ),

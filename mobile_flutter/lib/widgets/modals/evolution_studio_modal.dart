@@ -29,7 +29,6 @@ class _EvolutionStudioModalState extends State<EvolutionStudioModal> {
 
     return ArcSurface(
       key: c.tourTargets.keyFor(TutorialTargetId.evolutionStudioModal),
-      borderRadius: 24,
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.78,
         child: Column(

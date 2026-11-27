@@ -39,7 +39,6 @@ class _PaperStudioModalState extends State<PaperStudioModal> {
 
     return ArcSurface(
       key: c.tourTargets.keyFor(TutorialTargetId.paperStudioModal),
-      borderRadius: 24,
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.8,
         child: Column(

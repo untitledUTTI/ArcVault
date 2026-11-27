@@ -22,6 +22,8 @@ class ArcThemeTokens extends ThemeExtension<ArcThemeTokens> {
     required this.accentText,
     required this.radius,
     required this.radiusSm,
+    this.sidebarRadius = 22,
+    this.surfaceRadius = 24,
     required this.commentColor,
     required this.revisionColor,
   });
@@ -43,6 +45,8 @@ class ArcThemeTokens extends ThemeExtension<ArcThemeTokens> {
   final Color accentText;
   final double radius;
   final double radiusSm;
+  final double sidebarRadius;
+  final double surfaceRadius;
   final Color commentColor;
   final Color revisionColor;
 
@@ -95,6 +99,8 @@ class ArcThemeTokens extends ThemeExtension<ArcThemeTokens> {
           accentText: const Color(0xFFFFFFFF),
           radius: 12,
           radiusSm: 8,
+          sidebarRadius: settings.sidebarCornerRadius,
+          surfaceRadius: settings.cardCornerRadius,
           commentColor: commentColor,
           revisionColor: revisionColor,
         );
@@ -118,6 +124,8 @@ class ArcThemeTokens extends ThemeExtension<ArcThemeTokens> {
           accentText: const Color(0xFF081226),
           radius: 12,
           radiusSm: 8,
+          sidebarRadius: settings.sidebarCornerRadius,
+          surfaceRadius: settings.cardCornerRadius,
           commentColor: commentColor,
           revisionColor: revisionColor,
         );
@@ -141,6 +149,8 @@ class ArcThemeTokens extends ThemeExtension<ArcThemeTokens> {
           accentText: const Color(0xFFFFFDF7),
           radius: 12,
           radiusSm: 8,
+          sidebarRadius: settings.sidebarCornerRadius,
+          surfaceRadius: settings.cardCornerRadius,
           commentColor: commentColor,
           revisionColor: revisionColor,
         );
@@ -165,6 +175,8 @@ class ArcThemeTokens extends ThemeExtension<ArcThemeTokens> {
           accentText: m.onPrimary,
           radius: 24,
           radiusSm: 14,
+          sidebarRadius: settings.sidebarCornerRadius,
+          surfaceRadius: settings.cardCornerRadius,
           commentColor: commentColor,
           revisionColor: revisionColor,
         );
@@ -212,6 +224,8 @@ class ArcThemeTokens extends ThemeExtension<ArcThemeTokens> {
     Color? accentText,
     double? radius,
     double? radiusSm,
+    double? sidebarRadius,
+    double? surfaceRadius,
     Color? commentColor,
     Color? revisionColor,
   }) {
@@ -233,6 +247,8 @@ class ArcThemeTokens extends ThemeExtension<ArcThemeTokens> {
       accentText: accentText ?? this.accentText,
       radius: radius ?? this.radius,
       radiusSm: radiusSm ?? this.radiusSm,
+      sidebarRadius: sidebarRadius ?? this.sidebarRadius,
+      surfaceRadius: surfaceRadius ?? this.surfaceRadius,
       commentColor: commentColor ?? this.commentColor,
       revisionColor: revisionColor ?? this.revisionColor,
     );
@@ -256,14 +272,14 @@ class ArcSurface extends StatelessWidget {
   const ArcSurface({
     super.key,
     required this.child,
-    this.borderRadius = 20,
+    this.borderRadius,
     this.padding,
     this.color,
     this.borderColor,
   });
 
   final Widget child;
-  final double borderRadius;
+  final double? borderRadius;
   final EdgeInsetsGeometry? padding;
   final Color? color;
   final Color? borderColor;
@@ -271,12 +287,13 @@ class ArcSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.arcTheme;
+    final r = borderRadius ?? tokens.surfaceRadius;
     final content = padding != null ? Padding(padding: padding!, child: child) : child;
 
     return Container(
       decoration: BoxDecoration(
         color: color ?? tokens.bgElevated,
-        borderRadius: BorderRadius.circular(borderRadius),
+        borderRadius: BorderRadius.circular(r),
         border: Border.all(color: borderColor ?? tokens.borderSubtle),
         boxShadow: [
           BoxShadow(
@@ -287,7 +304,7 @@ class ArcSurface extends StatelessWidget {
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius),
+        borderRadius: BorderRadius.circular(r),
         child: content,
       ),
     );

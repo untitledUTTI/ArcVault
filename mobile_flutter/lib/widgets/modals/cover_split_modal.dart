@@ -44,7 +44,6 @@ class _CoverSplitModalState extends State<CoverSplitModal> {
     final isZh = c.settings.locale.isZh;
 
     return ArcSurface(
-      borderRadius: 24,
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.78,
         child: Column(

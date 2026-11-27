@@ -251,7 +251,6 @@ class _TimelinePanelState extends State<TimelinePanel> {
     if (widget.isModalSheet) {
       return ArcSurface(
         key: c.tourTargets.keyFor(TutorialTargetId.timelinePanel),
-        borderRadius: 24,
         child: body,
       );
     }

@@ -5,9 +5,7 @@ import {
   ChevronRight,
   Crosshair,
   GitPullRequestDraft,
-  Maximize2,
   MessageSquare,
-  Minimize2,
   RotateCcw,
   Send,
   Sparkles,
@@ -59,7 +57,6 @@ export const MobileAnnotationSheet: React.FC<MobileAnnotationSheetProps> = ({
   onHaptic,
   onClose,
 }) => {
-  const [expandedHeight, setExpandedHeight] = useState(false);
   const [showListMode, setShowListMode] = useState(false);
   const [replyDraft, setReplyDraft] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -132,7 +129,7 @@ export const MobileAnnotationSheet: React.FC<MobileAnnotationSheetProps> = ({
     >
       <div
         data-tour="annotation-sidebar"
-        className={`arc-bottom-sheet phase-${sheetPresence.phase} ${expandedHeight ? 'is-tall' : ''}`}
+        className={`arc-bottom-sheet phase-${sheetPresence.phase}`}
         onClick={(e) => e.stopPropagation()}
         onTouchStart={(e) => {
           const t = e.touches[0];
@@ -180,23 +177,6 @@ export const MobileAnnotationSheet: React.FC<MobileAnnotationSheetProps> = ({
                 : settings.locale === 'zh-CN'
                   ? '全部列表'
                   : 'List All'}
-            </button>
-            <button
-              type="button"
-              className="arc-btn arc-icon-btn"
-              style={{ height: 30 }}
-              onClick={() => setExpandedHeight((v) => !v)}
-              aria-label={
-                expandedHeight
-                  ? settings.locale === 'zh-CN'
-                    ? '还原高度'
-                    : 'Restore height'
-                  : settings.locale === 'zh-CN'
-                    ? '展开半屏'
-                    : 'Expand height'
-              }
-            >
-              {expandedHeight ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
             </button>
             <button
               type="button"

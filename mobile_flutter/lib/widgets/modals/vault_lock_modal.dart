@@ -33,7 +33,6 @@ class _VaultLockModalState extends State<VaultLockModal> {
 
     return ArcSurface(
       key: c.tourTargets.keyFor(TutorialTargetId.vaultLockModal),
-      borderRadius: 24,
       padding: const EdgeInsets.all(18),
       child: Column(
         mainAxisSize: MainAxisSize.min,

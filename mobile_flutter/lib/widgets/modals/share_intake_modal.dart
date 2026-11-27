@@ -40,7 +40,6 @@ class _ShareIntakeModalState extends State<ShareIntakeModal> {
     final isZh = c.settings.locale.isZh;
 
     return ArcSurface(
-      borderRadius: 24,
       padding: const EdgeInsets.all(16),
       child: Column(
         mainAxisSize: MainAxisSize.min,

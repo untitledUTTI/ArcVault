@@ -32,7 +32,6 @@ class _BranchModalState extends State<BranchModal> {
 
     return ArcSurface(
       key: c.tourTargets.keyFor(TutorialTargetId.branchModal),
-      borderRadius: 24,
       padding: const EdgeInsets.all(16),
       child: Column(
         mainAxisSize: MainAxisSize.min,

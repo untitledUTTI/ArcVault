@@ -382,7 +382,6 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
                     child: ArcSurface(
-                      borderRadius: 24,
                       padding: const EdgeInsets.all(20),
                       child: child,
                     ),
@@ -427,7 +426,6 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
                       MediaQuery.viewInsetsOf(context).bottom + 14,
                     ),
                     child: ArcSurface(
-                      borderRadius: 24,
                       padding: const EdgeInsets.all(18),
                       child: child,
                     ),
@@ -1482,7 +1480,6 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
                               .clamp(200.0, 520.0),
                         ),
                   child: ArcSurface(
-                    borderRadius: 20,
                     padding: const EdgeInsets.all(14),
                     color: t.bgElevated,
                     child: Column(
