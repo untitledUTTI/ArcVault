@@ -14,9 +14,31 @@ val tauriProperties = Properties().apply {
     }
 }
 
+val keyStorePropertiesFile = rootProject.file("keystore.properties").let {
+    if (it.exists()) it else rootProject.file("keyStore.properties")
+}
+val keyStoreProperties = Properties().apply {
+    if (keyStorePropertiesFile.exists()) {
+        keyStorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
 android {
     compileSdk = 37
     namespace = "com.arcvault.app"
+
+    signingConfigs {
+        create("release") {
+            val ksPath = keyStoreProperties.getProperty("storeFile")
+            if (!ksPath.isNullOrEmpty() && file(ksPath).exists()) {
+                storeFile = file(ksPath)
+                storePassword = keyStoreProperties.getProperty("storePassword")
+                keyAlias = keyStoreProperties.getProperty("keyAlias")
+                keyPassword = keyStoreProperties.getProperty("keyPassword", storePassword)
+            }
+        }
+    }
+
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "com.arcvault.app"
@@ -25,6 +47,7 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
@@ -39,6 +62,10 @@ android {
             }
         }
         getByName("release") {
+            val relSigning = signingConfigs.findByName("release")
+            if (relSigning?.storeFile?.exists() == true) {
+                signingConfig = relSigning
+            }
             optimization {
                enable = true
             }
@@ -50,6 +77,7 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
