@@ -855,7 +855,7 @@ export function computeGuideCardPlacement(params: {
       placement: 'top',
       // Always cap maxHeight to availableTop when placed above a cutout so ResizeObserver
       // measuring the constrained card never drops maxHeight and causes it to re-expand over the cutout.
-      maxHeight: availableTop >= 120 ? availableTop : undefined,
+      maxHeight: availableTop > 0 ? Math.max(96, availableTop) : undefined,
     };
   }
   if (chosen === 'right') {

@@ -3119,6 +3119,14 @@ html.is-resizing .arc-shell-resizer {
   max-height: 86%;
 }
 
+[data-tour-active='true'] .arc-bottom-sheet {
+  max-height: 52%;
+}
+
+[data-tour-active='true'] .arc-bottom-sheet.is-tall {
+  max-height: 62%;
+}
+
 .arc-sheet-handle-row {
   display: flex;
   justify-content: center;

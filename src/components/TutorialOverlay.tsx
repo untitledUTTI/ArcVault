@@ -211,6 +211,8 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
 
   const advancingRef = useRef(false);
   const lastScrolledStepIdRef = useRef<string | null>(null);
+  const dynamicRoRef = useRef<ResizeObserver | null>(null);
+  const observedTargetRef = useRef<Element | null>(null);
 
   const activeSpotlightStep =
     phase === 'player' && currentStep?.kind === 'step' ? currentStep.step : null;
@@ -302,6 +304,14 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
       return;
     }
 
+    if (dynamicRoRef.current && observedTargetRef.current !== primary) {
+      if (observedTargetRef.current) {
+        dynamicRoRef.current.unobserve(observedTargetRef.current);
+      }
+      dynamicRoRef.current.observe(primary);
+      observedTargetRef.current = primary;
+    }
+
     if (lastScrolledStepIdRef.current !== activeSpotlightStep.id) {
       lastScrolledStepIdRef.current = activeSpotlightStep.id;
       const pRect = primary.getBoundingClientRect();
@@ -384,10 +394,14 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
     let ro: ResizeObserver | null = null;
     if (typeof ResizeObserver !== 'undefined') {
       ro = new ResizeObserver(measureSpotlight);
+      dynamicRoRef.current = ro;
       if (rootRef.current) ro.observe(rootRef.current);
       if (activeSpotlightStep?.targetSelectors.length) {
         const primary = findVisibleElement(activeSpotlightStep.targetSelectors);
-        if (primary) ro.observe(primary);
+        if (primary) {
+          ro.observe(primary);
+          observedTargetRef.current = primary;
+        }
       }
     }
 
@@ -414,9 +428,23 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
       window.removeEventListener('scroll', onViewportChange, true);
       document.removeEventListener('transitionend', onTransitionEnd, true);
       ro?.disconnect();
+      dynamicRoRef.current = null;
+      observedTargetRef.current = null;
       mo?.disconnect();
     };
   }, [phase, activeStepKey, activeSpotlightStep, measureSpotlight]);
+
+  // Mark documentElement while spotlight player is active so bottom sheets leave room for guide card
+  useEffect(() => {
+    if (phase === 'player') {
+      document.documentElement.dataset.tourActive = 'true';
+    } else {
+      delete document.documentElement.dataset.tourActive;
+    }
+    return () => {
+      delete document.documentElement.dataset.tourActive;
+    };
+  }, [phase]);
 
   // Measure the guide card itself so placement never overflows viewport or collides with cutout
   useLayoutEffect(() => {
