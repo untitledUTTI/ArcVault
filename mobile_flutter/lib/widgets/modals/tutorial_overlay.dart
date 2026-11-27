@@ -471,11 +471,6 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
                 ],
               ),
             ),
-            IconButton(
-              onPressed: c.toggleLocale,
-              icon: Icon(LucideIcons.languages, size: 18, color: t.textPrimary),
-              tooltip: d.switchLanguage,
-            ),
           ],
         ),
         const SizedBox(height: 6),

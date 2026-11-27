@@ -166,11 +166,6 @@ class TopBar extends StatelessWidget {
               ],
             ),
           _TopIconButton(
-            icon: LucideIcons.palette,
-            tooltip: d.switchTheme,
-            onTap: controller.cycleTheme,
-          ),
-          _TopIconButton(
             icon: LucideIcons.settings,
             tooltip: d.settings,
             onTap: onOpenSettings,
@@ -179,71 +174,73 @@ class TopBar extends StatelessWidget {
           KeyedSubtree(
             key: controller.tourTargets.keyFor(TutorialTargetId.topbarMoreBtn),
             child: PopupMenuButton<String>(
-            icon: Icon(LucideIcons.ellipsis, size: 18, color: t.textPrimary),
-            color: t.bgElevated,
-            onSelected: (value) {
-              switch (value) {
-                case 'branches':
-                  onOpenBranches();
-                case 'paper-studio':
-                  onOpenPaperStudio();
-                case 'context-assets':
-                  onOpenContextAssets();
-                case 'evolution':
-                  onOpenEvolutionStudio();
-                case 'cover-split':
-                  onOpenCoverSplit();
-                case 'seal':
-                  controller.toggleSealActiveDoc();
-                case 'export-clean':
-                  controller.exportActiveDocument('clean');
-                case 'export-redline':
-                  controller.exportActiveDocument('redline');
-                case 'export-md':
-                  controller.exportActiveDocument('md');
-                case 'export-tex':
-                  controller.exportActiveDocument('tex');
-                case 'sync':
-                  onOpenSync();
-                case 'scan':
-                  onOpenCameraScan();
-                case 'share':
-                  onOpenShareIntake();
-                case 'fullscreen':
-                  controller.toggleFullscreen();
-                case 'locale':
-                  controller.toggleLocale();
-                case 'tutorial':
-                  controller.openTutorialReplay();
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(value: 'branches', child: _MenuRow(LucideIcons.gitBranch, d.branches)),
-              PopupMenuItem(value: 'paper-studio', child: _MenuRow(LucideIcons.stethoscope, d.paperStudioShort)),
-              PopupMenuItem(value: 'context-assets', child: _MenuRow(LucideIcons.paperclip, d.contextAssetsShort)),
-              PopupMenuItem(value: 'evolution', child: _MenuRow(LucideIcons.flame, d.evolutionStudioShort)),
-              if (doc?.baseDocxBase64 != null)
-                PopupMenuItem(value: 'cover-split', child: _MenuRow(LucideIcons.scissors, d.adjustCover)),
-              PopupMenuItem(
-                value: 'seal',
-                child: _MenuRow(
+              icon: Icon(LucideIcons.ellipsis, size: 18, color: t.textPrimary),
+              color: t.bgElevated,
+              surfaceTintColor: Colors.transparent,
+              elevation: 12,
+              shadowColor: Colors.black.withValues(alpha: t.isDark ? 0.48 : 0.14),
+              offset: const Offset(0, 40),
+              menuPadding: const EdgeInsets.symmetric(vertical: 6),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(t.radius > 16 ? 20 : 16),
+                side: BorderSide(color: t.borderStrong.withValues(alpha: 0.45)),
+              ),
+              onSelected: (value) {
+                switch (value) {
+                  case 'branches':
+                    onOpenBranches();
+                  case 'paper-studio':
+                    onOpenPaperStudio();
+                  case 'context-assets':
+                    onOpenContextAssets();
+                  case 'evolution':
+                    onOpenEvolutionStudio();
+                  case 'cover-split':
+                    onOpenCoverSplit();
+                  case 'seal':
+                    controller.toggleSealActiveDoc();
+                  case 'export-clean':
+                    controller.exportActiveDocument('clean');
+                  case 'export-redline':
+                    controller.exportActiveDocument('redline');
+                  case 'export-md':
+                    controller.exportActiveDocument('md');
+                  case 'export-tex':
+                    controller.exportActiveDocument('tex');
+                  case 'sync':
+                    onOpenSync();
+                  case 'scan':
+                    onOpenCameraScan();
+                  case 'share':
+                    onOpenShareIntake();
+                  case 'tutorial':
+                    controller.openTutorialReplay();
+                }
+              },
+              itemBuilder: (context) => [
+                _menuItem('branches', LucideIcons.gitBranch, d.branches),
+                _menuItem('paper-studio', LucideIcons.stethoscope, d.paperStudioShort),
+                _menuItem('context-assets', LucideIcons.paperclip, d.contextAssetsShort),
+                _menuItem('evolution', LucideIcons.flame, d.evolutionStudioShort),
+                if (doc?.baseDocxBase64 != null)
+                  _menuItem('cover-split', LucideIcons.scissors, d.adjustCover),
+                _menuItem(
+                  'seal',
                   doc?.isSealed == true ? LucideIcons.unlock : LucideIcons.lock,
                   doc?.isSealed == true ? d.unseal : d.seal,
+                  accent: doc?.isSealed == true ? t.revisionColor : null,
                 ),
-              ),
-              const PopupMenuDivider(),
-              PopupMenuItem(value: 'export-clean', child: _MenuRow(LucideIcons.download, d.exportCleanWord)),
-              PopupMenuItem(value: 'export-redline', child: _MenuRow(LucideIcons.download, d.exportRedlineWord)),
-              PopupMenuItem(value: 'export-md', child: _MenuRow(LucideIcons.download, d.exportMd)),
-              PopupMenuItem(value: 'export-tex', child: _MenuRow(LucideIcons.download, d.exportTex)),
-              const PopupMenuDivider(),
-              PopupMenuItem(value: 'sync', child: _MenuRow(LucideIcons.wifi, d.syncLabel)),
-              PopupMenuItem(value: 'scan', child: _MenuRow(LucideIcons.camera, d.cameraScan)),
-              PopupMenuItem(value: 'share', child: _MenuRow(LucideIcons.share2, d.shareIntake)),
-              PopupMenuItem(value: 'fullscreen', child: _MenuRow(LucideIcons.maximize2, d.fullscreen)),
-              PopupMenuItem(value: 'locale', child: _MenuRow(LucideIcons.languages, d.switchLanguage)),
-              PopupMenuItem(value: 'tutorial', child: _MenuRow(LucideIcons.bookOpen, d.tutorialShort)),
-            ],
+                _ThemedMenuDivider(color: t.borderSubtle),
+                _menuItem('export-clean', LucideIcons.download, d.exportCleanWord),
+                _menuItem('export-redline', LucideIcons.download, d.exportRedlineWord),
+                _menuItem('export-md', LucideIcons.download, d.exportMd),
+                _menuItem('export-tex', LucideIcons.download, d.exportTex),
+                _ThemedMenuDivider(color: t.borderSubtle),
+                _menuItem('sync', LucideIcons.wifi, d.syncLabel),
+                _menuItem('scan', LucideIcons.camera, d.cameraScan),
+                _menuItem('share', LucideIcons.share2, d.shareIntake),
+                _menuItem('tutorial', LucideIcons.bookOpen, d.tutorialShort),
+              ],
             ),
           ),
         ],
@@ -261,20 +258,78 @@ class TopBar extends StatelessWidget {
   }
 }
 
+PopupMenuItem<String> _menuItem(
+  String value,
+  IconData icon,
+  String label, {
+  Color? accent,
+}) {
+  return PopupMenuItem<String>(
+    value: value,
+    height: 40,
+    padding: const EdgeInsets.symmetric(horizontal: 10),
+    child: _MenuRow(icon, label, accent: accent),
+  );
+}
+
+class _ThemedMenuDivider extends PopupMenuEntry<String> {
+  const _ThemedMenuDivider({required this.color});
+  final Color color;
+
+  @override
+  double get height => 9;
+
+  @override
+  bool represents(String? value) => false;
+
+  @override
+  State<_ThemedMenuDivider> createState() => _ThemedMenuDividerState();
+}
+
+class _ThemedMenuDividerState extends State<_ThemedMenuDivider> {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Divider(height: 1, thickness: 1, color: widget.color),
+    );
+  }
+}
+
 class _MenuRow extends StatelessWidget {
-  const _MenuRow(this.icon, this.label);
+  const _MenuRow(this.icon, this.label, {this.accent});
   final IconData icon;
   final String label;
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
     final t = context.arcTheme;
+    final iconColor = accent ?? t.accent;
+    final badgeBg = accent != null ? accent!.withValues(alpha: 0.14) : t.accentSoft;
     return Row(
       children: [
-        Icon(icon, size: 15, color: t.textSecondary),
+        Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            color: badgeBg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 14, color: iconColor),
+        ),
         const SizedBox(width: 10),
         Expanded(
-          child: Text(label, style: TextStyle(fontSize: 13, color: t.textPrimary)),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: t.textPrimary,
+            ),
+          ),
         ),
       ],
     );

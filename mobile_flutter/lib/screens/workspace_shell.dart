@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../core/device_layout.dart';
 import '../core/tutorial_flow.dart';
@@ -127,10 +126,6 @@ class _WorkspaceShellState extends State<WorkspaceShell> with SingleTickerProvid
           (layout.isCompact ? _inlineModal == _InlineModalType.timeline : !_timelineCollapsed)) {
         return;
       }
-    }
-
-    if (c.isFullscreen) {
-      c.toggleFullscreen();
     }
 
     void activateThesis() {
@@ -358,62 +353,61 @@ class _WorkspaceShellState extends State<WorkspaceShell> with SingleTickerProvid
               // Main Workspace Column
               Column(
                 children: [
-                  if (!c.isFullscreen)
-                    TopBar(
-                      controller: c,
-                      layout: layout,
-                      onOpenDrawer: () => _setDrawerOpen(true),
-                      onOpenTimelineSheet: () => _openTimelineSheet(context, c),
-                      onOpenAnnotationsSheet: () =>
-                          setState(() => _annotationSheetOpen = !_annotationSheetOpen),
-                      onOpenBranches: () => _openModalAware(
-                        context,
-                        _InlineModalType.branch,
-                        BranchModal(controller: c),
-                      ),
-                      onOpenPaperStudio: () => _openModalAware(
-                        context,
-                        _InlineModalType.paperStudio,
-                        PaperStudioModal(controller: c),
-                      ),
-                      onOpenContextAssets: () => _openModalAware(
-                        context,
-                        _InlineModalType.contextAssets,
-                        ContextAssetsModal(controller: c),
-                      ),
-                      onOpenEvolutionStudio: () => _openModalAware(
-                        context,
-                        _InlineModalType.evolutionStudio,
-                        EvolutionStudioModal(controller: c),
-                      ),
-                      onOpenCoverSplit: () {
-                        if (doc?.baseDocxBase64 != null) {
-                          _openModalAware(
-                            context,
-                            _InlineModalType.coverSplit,
-                            CoverSplitModal(controller: c),
-                          );
-                        }
-                      },
-                      onOpenSync: () => _openModalAware(
-                        context,
-                        _InlineModalType.sync,
-                        SyncModal(controller: c),
-                      ),
-                      onOpenSettings: () => _openSettings(context, c),
-                      onOpenCameraScan: () => _showGlassModal(context, CameraScanModal(controller: c)),
-                      onOpenShareIntake: () => _showGlassModal(context, ShareIntakeModal(controller: c)),
+                  TopBar(
+                    controller: c,
+                    layout: layout,
+                    onOpenDrawer: () => _setDrawerOpen(true),
+                    onOpenTimelineSheet: () => _openTimelineSheet(context, c),
+                    onOpenAnnotationsSheet: () =>
+                        setState(() => _annotationSheetOpen = !_annotationSheetOpen),
+                    onOpenBranches: () => _openModalAware(
+                      context,
+                      _InlineModalType.branch,
+                      BranchModal(controller: c),
                     ),
+                    onOpenPaperStudio: () => _openModalAware(
+                      context,
+                      _InlineModalType.paperStudio,
+                      PaperStudioModal(controller: c),
+                    ),
+                    onOpenContextAssets: () => _openModalAware(
+                      context,
+                      _InlineModalType.contextAssets,
+                      ContextAssetsModal(controller: c),
+                    ),
+                    onOpenEvolutionStudio: () => _openModalAware(
+                      context,
+                      _InlineModalType.evolutionStudio,
+                      EvolutionStudioModal(controller: c),
+                    ),
+                    onOpenCoverSplit: () {
+                      if (doc?.baseDocxBase64 != null) {
+                        _openModalAware(
+                          context,
+                          _InlineModalType.coverSplit,
+                          CoverSplitModal(controller: c),
+                        );
+                      }
+                    },
+                    onOpenSync: () => _openModalAware(
+                      context,
+                      _InlineModalType.sync,
+                      SyncModal(controller: c),
+                    ),
+                    onOpenSettings: () => _openSettings(context, c),
+                    onOpenCameraScan: () => _showGlassModal(context, CameraScanModal(controller: c)),
+                    onOpenShareIntake: () => _showGlassModal(context, ShareIntakeModal(controller: c)),
+                  ),
 
                   // Main Content Area
                   Expanded(
-                    child: layout.isCompact || c.isFullscreen
+                    child: layout.isCompact
                         ? _buildCompactBody(c, layout, t)
                         : _buildTabletLandscapeBody(c, layout, t),
                   ),
 
                   // Compact Bottom Quick Format Bar (with bottom safe area inset)
-                  if (layout.isCompact && !c.isFullscreen && doc != null)
+                  if (layout.isCompact && doc != null)
                     SafeArea(
                       top: false,
                       child: MobileQuickFormatBar(
@@ -460,31 +454,15 @@ class _WorkspaceShellState extends State<WorkspaceShell> with SingleTickerProvid
                 ],
               ),
 
-              // Exit Fullscreen Floating Pill
-              if (c.isFullscreen)
-                Positioned(
-                  top: layout.topPadding + 10,
-                  right: 12,
-                  child: ArcSurface(
-                    borderRadius: 18,
-                    child: TextButton.icon(
-                      onPressed: c.toggleFullscreen,
-                      icon: const Icon(LucideIcons.minimize2, size: 15),
-                      label: Text(s.locale.isZh ? '退出全屏' : 'Exit Focus'),
-                    ),
-                  ),
-                ),
-
               // Draggable Edge-Snapping Phrasebank Capsule
-              if (!c.isFullscreen)
-                PhrasebankFloatingCapsule(
-                  controller: c,
-                  onOpenModal: () => _openModalAware(
-                    context,
-                    _InlineModalType.phrasebank,
-                    PhrasebankModalSheet(controller: c),
-                  ),
+              PhrasebankFloatingCapsule(
+                controller: c,
+                onOpenModal: () => _openModalAware(
+                  context,
+                  _InlineModalType.phrasebank,
+                  PhrasebankModalSheet(controller: c),
                 ),
+              ),
 
               // Compact Mobile Annotation Half-Sheet
               if (layout.isCompact && _annotationSheetOpen)

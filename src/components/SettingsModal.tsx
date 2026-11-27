@@ -113,7 +113,6 @@ import type {
   EditorFontPreset,
   HapticIntensity,
   HapticPattern,
-  Locale,
   RenderBackendMode,
   RenderBackendStatus,
   RenderQualityTier,
@@ -2113,43 +2112,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <>
                   <div className="arc-settings-card">
                     <div className="arc-settings-card-title">
-                      <span>{isZh ? '语言与 Word 提取默认格式' : 'Language & Word Import Format'}</span>
+                      <span>{isZh ? 'Word 提取默认格式' : 'Word Import Format'}</span>
                     </div>
-                    <div className="arc-settings-grid-2">
-                      <div>
-                        <div style={{ marginBottom: 5, color: 'var(--text-secondary)' }}>{isZh ? 'Word 导入默认提取格式' : 'Default Word Extract Format'}</div>
-                        <ArcSelect
-                          ariaLabel={isZh ? 'Word 导入默认提取格式' : 'Default Word Extract Format'}
-                          value={settings.defaultBackupFormat}
-                          onChange={(val) => onUpdate({ defaultBackupFormat: val as BackupFormat })}
-                          options={
-                            isZh
-                              ? [
-                                  { value: 'both', label: '同时生成 Markdown 与 LaTeX 互转（推荐）' },
-                                  { value: 'markdown', label: '仅 Markdown (.md)' },
-                                  { value: 'latex', label: '仅 LaTeX (.tex)' },
-                                ]
-                              : [
-                                  { value: 'both', label: 'Both Markdown & LaTeX (Recommended)' },
-                                  { value: 'markdown', label: 'Markdown Only (.md)' },
-                                  { value: 'latex', label: 'LaTeX Only (.tex)' },
-                                ]
-                          }
-                        />
-                      </div>
-
-                      <div>
-                        <div style={{ marginBottom: 5, color: 'var(--text-secondary)' }}>{isZh ? '界面语言 / Language' : 'Interface Language'}</div>
-                        <ArcSelect
-                          ariaLabel={isZh ? '界面语言' : 'Interface Language'}
-                          value={settings.locale}
-                          onChange={(val) => onUpdate({ locale: val as Locale })}
-                          options={[
-                            { value: 'zh-CN', label: '简体中文' },
-                            { value: 'en-US', label: 'English' },
-                          ]}
-                        />
-                      </div>
+                    <div>
+                      <div style={{ marginBottom: 5, color: 'var(--text-secondary)' }}>{isZh ? 'Word 导入默认提取格式' : 'Default Word Extract Format'}</div>
+                      <ArcSelect
+                        ariaLabel={isZh ? 'Word 导入默认提取格式' : 'Default Word Extract Format'}
+                        value={settings.defaultBackupFormat}
+                        onChange={(val) => onUpdate({ defaultBackupFormat: val as BackupFormat })}
+                        options={
+                          isZh
+                            ? [
+                                { value: 'both', label: '同时生成 Markdown 与 LaTeX 互转（推荐）' },
+                                { value: 'markdown', label: '仅 Markdown (.md)' },
+                                { value: 'latex', label: '仅 LaTeX (.tex)' },
+                              ]
+                            : [
+                                { value: 'both', label: 'Both Markdown & LaTeX (Recommended)' },
+                                { value: 'markdown', label: 'Markdown Only (.md)' },
+                                { value: 'latex', label: 'LaTeX Only (.tex)' },
+                              ]
+                        }
+                      />
                     </div>
                   </div>
 

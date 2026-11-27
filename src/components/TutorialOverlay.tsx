@@ -15,7 +15,6 @@ import {
   FolderOpen,
   GitBranch,
   HardDrive,
-  Languages,
   Layers,
   Maximize2,
   Minimize2,
@@ -93,7 +92,6 @@ export interface TutorialOverlayProps {
   onPickVaultDirectory?: () => Promise<string | null>;
   onSetCustomVaultDir?: (path: string) => Promise<void>;
   onSelectTheme: (theme: ThemeId) => void;
-  onToggleLocale: () => void;
   onHaptic?: (pattern: HapticPattern) => void;
   onApplyScene: (scene: TutorialSceneId) => void;
   onCompleteFirstRun: () => void;
@@ -155,13 +153,11 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
   deviceEnv,
   dict,
   theme,
-  locale,
   readyToStart = true,
   runtimeInfo,
   onPickVaultDirectory,
   onSetCustomVaultDir,
   onSelectTheme,
-  onToggleLocale,
   onHaptic,
   onApplyScene,
   onCompleteFirstRun,
@@ -640,19 +636,6 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
             />
 
             <div className="arc-welcome-titlebar-actions">
-              <button
-                type="button"
-                className="arc-btn"
-                style={{ height: 28, fontSize: 12, padding: '0 10px' }}
-                onClick={() => {
-                  onHaptic?.('selection');
-                  onToggleLocale();
-                }}
-              >
-                <Languages size={14} />
-                <span>{locale === 'zh-CN' ? 'EN' : '中文'}</span>
-              </button>
-
               {showCustomWinControls && (
                 <div className="arc-win-controls" role="group" aria-label={dict.topbar.winControls}>
                   <button

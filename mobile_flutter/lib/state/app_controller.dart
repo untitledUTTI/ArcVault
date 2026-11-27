@@ -48,7 +48,6 @@ class AppController extends ChangeNotifier {
   String _activeSpaceId = 'sp_paper';
   String? _activeDocId;
   bool _splitPreview = false;
-  bool _isFullscreen = false;
   bool _vaultUnlocked = true;
   String? _vaultPasscode;
   String? _vaultPassHash;
@@ -105,7 +104,6 @@ class AppController extends ChangeNotifier {
 
   CasObjectStore get cas => _cas;
   bool get splitPreview => _splitPreview;
-  bool get isFullscreen => _isFullscreen;
   bool get vaultUnlocked => _vaultUnlocked;
   bool get hasVaultPasscode => _vaultPassHash != null;
   String get resolvedVaultDir => _resolvedVaultDir;
@@ -263,20 +261,6 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  void cycleTheme() {
-    const order = TutorialFlow.mobileWelcomeThemes;
-    final idx = order.indexOf(_settings.theme);
-    final next = order[(idx + 1) % order.length];
-    updateSettings(_settings.copyWith(theme: next));
-    triggerHaptic(HapticPattern.selection);
-  }
-
-  void toggleLocale() {
-    final next = _settings.locale.isZh ? LocaleId.enUS : LocaleId.zhCN;
-    updateSettings(_settings.copyWith(locale: next));
-    triggerHaptic(HapticPattern.selection);
-  }
-
   void selectSpace(String spaceId) {
     _activeSpaceId = spaceId;
     final docs = activeSpaceDocuments;
@@ -307,12 +291,6 @@ class AppController extends ChangeNotifier {
   void toggleSplitPreview() {
     _splitPreview = !_splitPreview;
     triggerHaptic(HapticPattern.selection);
-    notifyListeners();
-  }
-
-  void toggleFullscreen() {
-    _isFullscreen = !_isFullscreen;
-    triggerHaptic(HapticPattern.light);
     notifyListeners();
   }
 

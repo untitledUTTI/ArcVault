@@ -159,18 +159,9 @@ import type {
   Snapshot,
   SyncConflictItem,
   SyncOpLogEntry,
-  ThemeId,
   WritingActivityDay,
 } from './types/archive';
 
-const THEMES: ThemeId[] = [
-  'light',
-  'dark',
-  'paper',
-  'm3-expressive',
-  'celestial-optics',
-  'weather-live',
-];
 const SETTINGS_STORAGE_KEY = 'arcvault_settings_v1';
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -2298,7 +2289,6 @@ export function App() {
         activeFormat={activeDoc?.activeFormat ?? 'markdown'}
         splitPreview={splitPreview}
         theme={settings.theme}
-        locale={settings.locale}
         leftCollapsed={isDrawerMode ? !mobileDrawerOpen : leftSidebarCollapsed}
         rightCollapsed={rightSidebarCollapsed}
         openAnnotationCount={openAnnotationCount}
@@ -2371,13 +2361,6 @@ export function App() {
         onExportCleanWord={() => handleExportWord('clean')}
         onExportRedlineWord={() => handleExportWord('redline')}
         onExportText={handleExportText}
-        onCycleTheme={() => {
-          const idx = THEMES.indexOf(settings.theme);
-          setSettings((s) => ({ ...s, theme: THEMES[(idx + 1) % THEMES.length] }));
-        }}
-        onToggleLocale={() =>
-          setSettings((s) => ({ ...s, locale: s.locale === 'zh-CN' ? 'en-US' : 'zh-CN' }))
-        }
         onOpenSettings={() => {
           setSettingsInitialTab('appearance');
           setSettingsOpen(true);
@@ -3028,9 +3011,6 @@ export function App() {
           onPickVaultDirectory={handlePickVaultDirectory}
           onSetCustomVaultDir={handleSetCustomVaultDir}
           onSelectTheme={(nextTheme) => setSettings((s) => ({ ...s, theme: nextTheme }))}
-          onToggleLocale={() =>
-            setSettings((s) => ({ ...s, locale: s.locale === 'zh-CN' ? 'en-US' : 'zh-CN' }))
-          }
           onHaptic={triggerAppHaptic}
           onApplyScene={applyTutorialScene}
           onCompleteFirstRun={() => {

@@ -7,9 +7,7 @@ import {
   Unlock,
   Download,
   Settings,
-  Languages,
   Scissors,
-  Palette,
   ChevronDown,
   GitBranch,
   Stethoscope,
@@ -58,7 +56,6 @@ import type {
   ArchiveDocument,
   EditorFormat,
   HapticPattern,
-  Locale,
   ThemeId,
 } from '../types/archive';
 import type { I18nDict } from '../i18n/dictionaries';
@@ -70,7 +67,6 @@ interface TopBarProps {
   activeFormat: EditorFormat;
   splitPreview: boolean;
   theme: ThemeId;
-  locale: Locale;
   leftCollapsed: boolean;
   rightCollapsed: boolean;
   openAnnotationCount: number;
@@ -110,8 +106,6 @@ interface TopBarProps {
   onExportCleanWord: () => void;
   onExportRedlineWord: () => void;
   onExportText: (fmt: EditorFormat) => void;
-  onCycleTheme: () => void;
-  onToggleLocale: () => void;
   onOpenSettings: () => void;
   onOpenSync?: () => void;
   onOpenTimelineSheet?: () => void;
@@ -128,7 +122,6 @@ export const TopBar: React.FC<TopBarProps> = ({
   activeFormat,
   splitPreview,
   theme,
-  locale,
   leftCollapsed,
   rightCollapsed,
   openAnnotationCount,
@@ -168,8 +161,6 @@ export const TopBar: React.FC<TopBarProps> = ({
   onExportCleanWord,
   onExportRedlineWord,
   onExportText,
-  onCycleTheme,
-  onToggleLocale,
   onOpenSettings,
   onOpenSync,
   onOpenTimelineSheet,
@@ -481,30 +472,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                   <span>{dict.topbar.shareIntake}</span>
                 </button>
               )}
-              <button
-                type="button"
-                className="arc-btn arc-dropdown-item"
-                onClick={() => {
-                  setOpenMenu(null);
-                  onHaptic?.('selection');
-                  onCycleTheme();
-                }}
-              >
-                <Palette size={14} />
-                <span>{dict.topbar.switchTheme}: {dict.themes[theme]}</span>
-              </button>
-              <button
-                type="button"
-                className="arc-btn arc-dropdown-item"
-                onClick={() => {
-                  setOpenMenu(null);
-                  onHaptic?.('selection');
-                  onToggleLocale();
-                }}
-              >
-                <Languages size={14} />
-                <span>{dict.topbar.switchLanguage} ({locale})</span>
-              </button>
               {onOpenTutorial && (
                 <button
                   type="button"
@@ -1114,17 +1081,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                     <Download size={14} />
                     <span>{dict.topbar.exportShort} {activeFormat === 'markdown' ? '.md' : '.tex'}</span>
                   </button>
-                  <button
-                    type="button"
-                    className="arc-btn arc-dropdown-item"
-                    onClick={() => {
-                      setOpenMenu(null);
-                      onEnterFullscreen();
-                    }}
-                  >
-                    <Maximize2 size={14} />
-                    <span>{dict.topbar.fullscreenMenu}</span>
-                  </button>
                   <div className="arc-dropdown-divider" />
                 </>
               )}
@@ -1156,30 +1112,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                   <span>{dict.topbar.shareIntake}</span>
                 </button>
               )}
-              <button
-                type="button"
-                className="arc-btn arc-dropdown-item"
-                onClick={() => {
-                  setOpenMenu(null);
-                  onHaptic?.('selection');
-                  onCycleTheme();
-                }}
-              >
-                <Palette size={14} />
-                <span>{dict.topbar.switchTheme}: {dict.themes[theme]}</span>
-              </button>
-              <button
-                type="button"
-                className="arc-btn arc-dropdown-item"
-                onClick={() => {
-                  setOpenMenu(null);
-                  onHaptic?.('selection');
-                  onToggleLocale();
-                }}
-              >
-                <Languages size={14} />
-                <span>{dict.topbar.switchLanguage} ({locale})</span>
-              </button>
               {onOpenTutorial && (
                 <button
                   type="button"
@@ -1196,25 +1128,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               )}
             </div>
           </div>
-        ) : (
-          <>
-            <button
-              className="arc-btn arc-icon-btn"
-              onClick={onCycleTheme}
-              title={`${dict.topbar.switchTheme}: ${dict.themes[theme]}`}
-            >
-              <Palette size={14} />
-            </button>
-
-            <button
-              className="arc-btn arc-icon-btn"
-              onClick={onToggleLocale}
-              title="Switch Language / 切换语言"
-            >
-              <Languages size={14} />
-            </button>
-          </>
-        )}
+        ) : null}
 
         <button className="arc-btn arc-icon-btn" onClick={onOpenSettings} title={dict.actions.settings}>
           <Settings size={14} />

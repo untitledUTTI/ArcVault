@@ -74,8 +74,6 @@ class ArcStrings {
   String get toolbox => isZh ? '工具箱' : 'Toolbox';
   String get snapshotShort => isZh ? '快照' : 'Snap';
   String get exportShort => isZh ? '导出' : 'Export';
-  String get fullscreen => isZh ? '全屏' : 'Focus';
-  String get exitFullscreen => isZh ? '退出全屏' : 'Exit Focus';
   String get branches => isZh ? 'A/B 平行分支' : 'A/B Parallel Branches';
   String get paperStudioShort => isZh ? '一致性体检 & Rebuttal' : 'Consistency & Rebuttal';
   String get contextAssetsShort => isZh ? '修改动机 & 科研资产' : 'Motivations & Assets';
@@ -87,8 +85,6 @@ class ArcStrings {
   String get annotationsSheet => isZh ? '批注与修订卡片' : 'Annotations & Revisions';
   String get cameraScan => isZh ? '拍照扫描入库' : 'Camera Scan Intake';
   String get shareIntake => isZh ? '系统分享 / 剪贴板入库' : 'System Share / Clipboard Intake';
-  String get switchTheme => isZh ? '切换主题' : 'Theme';
-  String get switchLanguage => isZh ? '切换语言' : 'Language';
   String get openMenu => isZh ? '打开档案列表' : 'Open Archive Drawer';
 
   // Sidebar
