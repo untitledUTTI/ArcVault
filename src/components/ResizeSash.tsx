@@ -42,14 +42,16 @@ export const ResizeSash: React.FC<ResizeSashProps> = ({
     };
   }, []);
 
-  const handlePointerEnter = () => {
+  const handlePointerEnter = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch') return;
     clearLeaveTimer();
     hoveredRef.current = true;
     setHovered(true);
     setPulseMounted(true);
   };
 
-  const handlePointerLeave = () => {
+  const handlePointerLeave = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch') return;
     hoveredRef.current = false;
     setHovered(false);
     if (!dragging) {
@@ -63,24 +65,33 @@ export const ResizeSash: React.FC<ResizeSashProps> = ({
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     clearLeaveTimer();
+    if (e.pointerType === 'touch') {
+      hoveredRef.current = false;
+      setHovered(false);
+    }
     setDragging(true);
     setPulseMounted(true);
 
     pointerUpCleanupRef.current?.();
     const onPointerUp = () => {
       setDragging(false);
+      hoveredRef.current = false;
+      setHovered(false);
       window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
       pointerUpCleanupRef.current = null;
-      if (!hoveredRef.current) {
-        clearLeaveTimer();
-        leaveTimerRef.current = window.setTimeout(() => {
-          setPulseMounted(false);
-          leaveTimerRef.current = null;
-        }, 300);
-      }
+      clearLeaveTimer();
+      leaveTimerRef.current = window.setTimeout(() => {
+        setPulseMounted(false);
+        leaveTimerRef.current = null;
+      }, 220);
     };
     window.addEventListener('pointerup', onPointerUp);
-    pointerUpCleanupRef.current = () => window.removeEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+    pointerUpCleanupRef.current = () => {
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+    };
 
     onPointerDown(e);
   };

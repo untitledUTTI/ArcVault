@@ -27,7 +27,7 @@ export interface EditorSelectionInfo {
 export interface DocumentEditorHandle {
   insertAtCursor: (text: string) => void;
   replaceRange: (from: number, to: number, text: string) => void;
-  selectAndScrollTo: (from: number, to: number) => void;
+  selectAndScrollTo: (from: number, to: number, shouldFocus?: boolean) => void;
   getPositionTop: (pos: number) => number | null;
   focus: () => void;
 }
@@ -43,6 +43,7 @@ interface DocumentEditorProps {
   onChange: (nextText: string) => void;
   onHoverAnnotation: (id: string | null) => void;
   onClickAnnotation: (id: string) => void;
+  onLongPressMenu?: (info: { x: number; y: number; annotationId: string | null }) => void;
   onAnchorsMeasured: (geometries: Record<string, AnchorGeometry>) => void;
   onSelectionChange?: (info: EditorSelectionInfo) => void;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -219,6 +220,7 @@ export const DocumentEditor = React.forwardRef<DocumentEditorHandle, DocumentEdi
   onChange,
   onHoverAnnotation,
   onClickAnnotation,
+  onLongPressMenu,
   onAnchorsMeasured,
   onSelectionChange,
   scrollContainerRef,
@@ -235,6 +237,7 @@ export const DocumentEditor = React.forwardRef<DocumentEditorHandle, DocumentEdi
     onChange,
     onHoverAnnotation,
     onClickAnnotation,
+    onLongPressMenu,
     onAnchorsMeasured,
     onSelectionChange,
   });
@@ -246,6 +249,7 @@ export const DocumentEditor = React.forwardRef<DocumentEditorHandle, DocumentEdi
     onChange,
     onHoverAnnotation,
     onClickAnnotation,
+    onLongPressMenu,
     onAnchorsMeasured,
     onSelectionChange,
   };
@@ -281,7 +285,7 @@ export const DocumentEditor = React.forwardRef<DocumentEditorHandle, DocumentEdi
         });
         view.focus();
       },
-      selectAndScrollTo(from: number, to: number) {
+      selectAndScrollTo(from: number, to: number, shouldFocus = true) {
         const view = viewRef.current;
         if (!view) return;
         const docLen = view.state.doc.length;
@@ -291,7 +295,9 @@ export const DocumentEditor = React.forwardRef<DocumentEditorHandle, DocumentEdi
           selection: { anchor: safeFrom, head: safeTo },
           effects: EditorView.scrollIntoView(safeFrom, { y: 'center' }),
         });
-        view.focus();
+        if (shouldFocus) {
+          view.focus();
+        }
       },
       getPositionTop(pos: number) {
         const view = viewRef.current;
@@ -397,11 +403,75 @@ export const DocumentEditor = React.forwardRef<DocumentEditorHandle, DocumentEdi
                 latestPropsRef.current.onClickAnnotation(id);
               }
             },
+            contextmenu(event) {
+              if (!latestPropsRef.current.onLongPressMenu) return;
+              // Allow native Android/iOS touch selection & handles; intercept only desktop right-click
+              if (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) return;
+              event.preventDefault();
+              const target = event.target as HTMLElement | null;
+              const annEl = target?.closest('[data-ann-id]') as HTMLElement | null;
+              const id = annEl?.getAttribute('data-ann-id') ?? null;
+              latestPropsRef.current.onLongPressMenu({
+                x: event.clientX,
+                y: event.clientY,
+                annotationId: id,
+              });
+            },
           }),
         ],
       }),
       parent: hostRef.current,
     });
+
+    const hostEl = hostRef.current;
+    let longPressTimer: number | null = null;
+    let startX = 0;
+    let startY = 0;
+    const clearLp = () => {
+      if (longPressTimer !== null) {
+        window.clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
+    const onPointerDownLp = (e: PointerEvent) => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      if (!latestPropsRef.current.onLongPressMenu) return;
+      // Do not hijack native cursor/selection handle dragging when text is already selected
+      const sel = view.state.selection.main;
+      const domSel = typeof window !== 'undefined' ? window.getSelection()?.toString() ?? '' : '';
+      if (sel.from !== sel.to || domSel.length > 0) {
+        clearLp();
+        return;
+      }
+      clearLp();
+      startX = e.clientX;
+      startY = e.clientY;
+      const target = e.target as HTMLElement | null;
+      const annEl = target?.closest('[data-ann-id]') as HTMLElement | null;
+      const annId = annEl?.getAttribute('data-ann-id') ?? null;
+      longPressTimer = window.setTimeout(() => {
+        longPressTimer = null;
+        const curSel = view.state.selection.main;
+        const curDomSel = typeof window !== 'undefined' ? window.getSelection()?.toString() ?? '' : '';
+        if (curSel.from !== curSel.to || curDomSel.length > 0) return;
+        latestPropsRef.current.onLongPressMenu?.({
+          x: startX,
+          y: startY,
+          annotationId: annId,
+        });
+      }, 480);
+    };
+    const onPointerMoveLp = (e: PointerEvent) => {
+      if (longPressTimer === null) return;
+      if (Math.hypot(e.clientX - startX, e.clientY - startY) > 8) {
+        clearLp();
+      }
+    };
+    document.addEventListener('selectionchange', clearLp);
+    hostEl.addEventListener('pointerdown', onPointerDownLp, { passive: true });
+    hostEl.addEventListener('pointermove', onPointerMoveLp, { passive: true });
+    hostEl.addEventListener('pointerup', clearLp, { passive: true });
+    hostEl.addEventListener('pointercancel', clearLp, { passive: true });
 
     viewRef.current = view;
     const initSel = extractSelectionInfo(view.state);
@@ -423,6 +493,12 @@ export const DocumentEditor = React.forwardRef<DocumentEditorHandle, DocumentEdi
     }
 
     return () => {
+      clearLp();
+      document.removeEventListener('selectionchange', clearLp);
+      hostEl.removeEventListener('pointerdown', onPointerDownLp);
+      hostEl.removeEventListener('pointermove', onPointerMoveLp);
+      hostEl.removeEventListener('pointerup', clearLp);
+      hostEl.removeEventListener('pointercancel', clearLp);
       ro?.disconnect();
       view.destroy();
       viewRef.current = null;

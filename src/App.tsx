@@ -300,7 +300,8 @@ export function App() {
   );
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [mobileTimelineOpen, setMobileTimelineOpen] = useState(false);
-  const [mobileAnnotationSheetOpen, setMobileAnnotationSheetOpen] = useState(false);
+  const [revisionMode, setRevisionMode] = useState(false);
+  const [revisionOrbMenuOpen, setRevisionOrbMenuOpen] = useState(false);
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [trashModalOpen, setTrashModalOpen] = useState(false);
   const [tutorialMode, setTutorialMode] = useState<TutorialMode | null>(() =>
@@ -1748,7 +1749,7 @@ export function App() {
       setIsFullscreen(false);
       setMobileDrawerOpen(false);
       setMobileTimelineOpen(false);
-      setMobileAnnotationSheetOpen(false);
+      setRevisionMode(false);
 
       const activateThesis = () => {
         if (!thesisDoc) return;
@@ -1797,7 +1798,7 @@ export function App() {
           activateThesis();
           setSplitPreview(false);
           if (isDrawerMode) {
-            setMobileAnnotationSheetOpen(true);
+            setRevisionMode(true);
           } else {
             setRightSidebarCollapsed(false);
           }
@@ -1935,7 +1936,7 @@ export function App() {
       setIsFullscreen(false);
       setMobileDrawerOpen(false);
       setMobileTimelineOpen(false);
-      setMobileAnnotationSheetOpen(false);
+      setRevisionMode(false);
 
       const saved = restorePreState ? preTutorialStateRef.current : null;
       if (saved) {
@@ -2282,9 +2283,66 @@ export function App() {
         </button>
       )}
 
-      <TopBar
-        dict={dict}
-        doc={activeDoc}
+      {revisionMode ? (
+        <div className="arc-revision-topbar-orb-wrap">
+          <button
+            type="button"
+            className="arc-revision-topbar-orb"
+            onClick={() => {
+              triggerAppHaptic('light');
+              setRevisionOrbMenuOpen((v) => !v);
+            }}
+            title={settings.locale === 'zh-CN' ? '修订模式菜单' : 'Revision Mode Menu'}
+          >
+            <span className="arc-orb-dot" />
+            <span>{settings.locale === 'zh-CN' ? '修订' : 'Rev'}</span>
+            {openAnnotationCount > 0 && (
+              <span className="arc-orb-badge">{openAnnotationCount}</span>
+            )}
+          </button>
+          {revisionOrbMenuOpen && (
+            <div className="arc-revision-orb-menu">
+              <button
+                type="button"
+                className="arc-btn arc-btn-primary"
+                style={{ height: 30, fontSize: 12, width: '100%', justifyContent: 'flex-start' }}
+                onClick={() => {
+                  triggerAppHaptic('medium');
+                  setRevisionOrbMenuOpen(false);
+                  setRevisionMode(false);
+                }}
+              >
+                {settings.locale === 'zh-CN' ? '退出修订模式' : 'Exit Revision Mode'}
+              </button>
+              <button
+                type="button"
+                className="arc-btn"
+                style={{ height: 30, fontSize: 12, width: '100%', justifyContent: 'flex-start' }}
+                onClick={() => {
+                  setRevisionOrbMenuOpen(false);
+                  handleSaveMilestone();
+                }}
+              >
+                {settings.locale === 'zh-CN' ? '保存里程碑' : 'Save Milestone'}
+              </button>
+              <button
+                type="button"
+                className="arc-btn"
+                style={{ height: 30, fontSize: 12, width: '100%', justifyContent: 'flex-start' }}
+                onClick={() => {
+                  setRevisionOrbMenuOpen(false);
+                  setSettingsOpen(true);
+                }}
+              >
+                {settings.locale === 'zh-CN' ? '打开设置' : 'Settings'}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <TopBar
+          dict={dict}
+          doc={activeDoc}
         activeBranchName={activeBranchName}
         activeFormat={activeDoc?.activeFormat ?? 'markdown'}
         splitPreview={splitPreview}
@@ -2307,7 +2365,7 @@ export function App() {
         }}
         onToggleRightSidebar={() => {
           if (deviceEnv.isPhone || deviceEnv.isTabletPortrait) {
-            setMobileAnnotationSheetOpen((v) => !v);
+            setRevisionMode((v) => !v);
           } else {
             setRightSidebarCollapsed((c) => !c);
           }
@@ -2375,6 +2433,7 @@ export function App() {
         onOpenTutorial={() => setTutorialMode('replay')}
         onHaptic={triggerAppHaptic}
       />
+      )}
 
       <Sidebar
         dict={dict}
@@ -2508,8 +2567,8 @@ export function App() {
           deviceEnv={deviceEnv}
           canUndo={activeHistory?.canUndo() ?? false}
           canRedo={activeHistory?.canRedo() ?? false}
-          mobileAnnotationSheetOpen={mobileAnnotationSheetOpen}
-          onSetMobileAnnotationSheetOpen={setMobileAnnotationSheetOpen}
+          revisionMode={revisionMode}
+          onSetRevisionMode={setRevisionMode}
           onUndo={handleUndo}
           onRedo={handleRedo}
           onFormatChange={(fmt) =>

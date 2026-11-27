@@ -13,6 +13,7 @@ import type { EditorFormat, HapticPattern } from '../types/archive';
 
 interface MobileQuickFormatBarProps {
   isZh?: boolean;
+  inRevisionMode?: boolean;
   readOnly: boolean;
   activeFormat: EditorFormat;
   splitPreview: boolean;
@@ -34,6 +35,7 @@ interface MobileQuickFormatBarProps {
 
 export const MobileQuickFormatBar: React.FC<MobileQuickFormatBarProps> = ({
   isZh = true,
+  inRevisionMode = false,
   readOnly,
   activeFormat,
   splitPreview,
@@ -53,7 +55,12 @@ export const MobileQuickFormatBar: React.FC<MobileQuickFormatBarProps> = ({
   onHaptic,
 }) => {
   return (
-    <div className="arc-mobile-quickbar" data-tour="mobile-format-bar" role="toolbar" aria-label={isZh ? '移动端快捷学术工具栏' : 'Mobile Quick Format Bar'}>
+    <div
+      className={`arc-mobile-quickbar ${inRevisionMode ? 'is-revision-capsule' : ''}`}
+      data-tour="mobile-format-bar"
+      role="toolbar"
+      aria-label={isZh ? '移动端快捷学术工具栏' : 'Mobile Quick Format Bar'}
+    >
       <div className="arc-mobile-quickbar-scroll">
         <button
           type="button"

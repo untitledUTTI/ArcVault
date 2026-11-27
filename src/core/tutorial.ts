@@ -261,8 +261,8 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
     points: [
       '无损封面切分：导入 .docx 后可手动微调“正文起点”，正文改写不破坏原封面 XML。',
       '底部三键分工：支持全部导入、取消返回、确认切分并提取正文。',
-      '平行批注连线：导师批注与修订卡片在右侧与正文精确对齐，并带 Arc-Link 曲线连线。',
-      '修订处理：支持一键接受/拒绝单条修订，或调用 AI 建议并支持 Ctrl+Z 撤销。',
+      '分屏与平行审阅：桌面端带 Arc-Link 平行连线；移动端长按正文胶囊「进入修订模式」，分屏拖动句柄调整大小，顶栏缩为悬浮球、底栏胶囊随原文宽度自适应。',
+      '黑板便签与贴纸存档：长按修订区进入黑板视图（第一行批注、第二行修订，双指缩放与底部章节/搜索胶囊），切换便签自动独立存档草稿并绑定贴纸（最新在最下方）。',
     ],
     steps: [
       {
@@ -304,31 +304,31 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
       {
         id: 'ann-open-card',
         moduleId: 'word-annotations',
-        title: '第三步：展开平行批注与修订卡片',
+        title: '第三步：分屏修订模式与黑板便签视图',
         description:
-          '导入带批注的 .docx 后，右侧平行批注栏（手机端为底部批注抽屉）会按正文锚点位置自动对齐每条导师批注与修订。请在高亮区域点击任意一张批注/修订卡片将其展开！',
+          '导入带批注的 .docx 后，电脑端可在右侧平行批注栏审阅；移动端点击标红/标蓝高亮不再弹出卡片，而是长按任意正文通过胶囊菜单「进入修订模式」开启分屏审阅（可拖动句柄调整比例），长按修订区还可切换为黑板大头针便签视图！',
         bullets: [
-          '蓝色标识为「批注」，红色标识为「修订建议（替换/插入/删除）」。',
-          '点击卡片或正文中的高亮锚点都会自动双向滚动对齐。',
+          '蓝色标识为「批注」，红色标识为「修订建议」，点击正文高亮仅定位选中，长按文本即可呼出胶囊菜单进入修订模式。',
+          '黑板视图第一行为批注便签、第二行为修订便签，支持上下左右滑动切签、双指缩放黑板，底部淡入胶囊支持快速切换章节与搜索。',
         ],
         scene: 'annotations',
         targetSelectors: ['[data-tour="annotation-sidebar"]'],
         preferredPlacement: 'left',
         padding: 6,
         actionGate: {
-          triggerSelector: '[data-tour="annotation-card"], [data-tour="mobile-ann-next-btn"]',
-          buttonLabel: '批注/修订卡片',
+          triggerSelector: '[data-tour="annotation-card"], [data-tour="revision-split-pane"], [data-tour="revision-next-btn"]',
+          buttonLabel: '批注/修订项',
         },
       },
       {
         id: 'ann-actions',
         moduleId: 'word-annotations',
-        title: '第四步：Arc-Link 连线与修订处理',
+        title: '第四步：修订处理、独立草稿与贴纸存档',
         description:
-          '卡片展开后可以看到连接正文的 Arc-Link 曲线以及完整的审阅操作栏，你可以自由点击体验后再继续：',
+          '在平行批注栏或分屏修订区中，你可以直接处理批注与修订，未保存的草稿也会与便签独立绑定并生成贴纸存档：',
         bullets: [
-          '修订类卡片支持「接受修订 / 拒绝修订」，一键同步修改正文并支持 Ctrl+Z 撤销。',
-          '批注类卡片支持「标记已解决 / 回复」，也可点击「AI 改写建议」获取润色方案。',
+          '修订支持「采纳修订 / 拒绝修订」，一键同步修改正文并支持 Ctrl+Z 撤销；批注支持「标记解决 / 回复」与「AI 改写建议」。',
+          '切换便签时未保存的草稿自动独立保存并绑定贴纸显示在黑板下方（支持自定义贴纸与导入 PNG，最新存档始终在贴纸列最下方，点击贴纸即可回到上次存档）。',
         ],
         scene: 'annotations',
         targetSelectors: ['[data-tour="annotation-sidebar"]'],

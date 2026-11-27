@@ -13,7 +13,24 @@ import { OfficePreviewPane } from './OfficePreviewPane';
 import { ResizeSash } from './ResizeSash';
 import { PhrasebankCapsule } from './phrasebank/PhrasebankCapsule';
 import { MobileQuickFormatBar } from './MobileQuickFormatBar';
-import { MobileAnnotationSheet } from './MobileAnnotationSheet';
+import { RevisionSplitWorkspace } from './RevisionSplitWorkspace';
+import {
+  DEFAULT_REVISION_STICKERS,
+  JOURNAL_STRIP_STICKERS,
+  createDefaultStickerTextStyle,
+  getStickerCategory,
+  loadCustomStickers,
+  loadDocArchiveStickers,
+  saveCustomStickers,
+  saveDocArchiveStickers,
+  type RevisionArchiveStickerItem,
+  type RevisionStickerDef,
+  type StickerCategory,
+  type StickerTextStyle,
+} from '../core/revisionStickers';
+import { StickerPickerTabs } from './StickerPickerTabs';
+import { StickerTextStyleControls } from './StickerTextStyleControls';
+import { StickerVisual } from './StickerVisual';
 import { normalizePhrasebankSettings } from '../core/phrasebank/phrasebankStorage';
 import { computeAlignedScrollTargets } from '../core/annotationLayout';
 import type { DocumentScrollState } from '../core/workspaceLayout';
@@ -45,8 +62,8 @@ interface EditorWorkspaceProps {
   deviceEnv?: DeviceEnvironment;
   canUndo?: boolean;
   canRedo?: boolean;
-  mobileAnnotationSheetOpen?: boolean;
-  onSetMobileAnnotationSheetOpen?: (open: boolean) => void;
+  revisionMode?: boolean;
+  onSetRevisionMode?: (open: boolean) => void;
   onUndo?: () => void;
   onRedo?: () => void;
   onFormatChange?: (fmt: EditorFormat) => void;
@@ -109,8 +126,8 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   deviceEnv,
   canUndo = false,
   canRedo = false,
-  mobileAnnotationSheetOpen = false,
-  onSetMobileAnnotationSheetOpen,
+  revisionMode = false,
+  onSetRevisionMode,
   onUndo,
   onRedo,
   onFormatChange,
@@ -158,6 +175,88 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const scrollSaveTimerRef = useRef<number | null>(null);
 
   const [selectionInfo, setSelectionInfo] = useState<EditorSelectionInfo | null>(null);
+  const [splitRatio, setSplitRatio] = useState(0.5);
+  const [longPressMenu, setLongPressMenu] = useState<{
+    x: number;
+    y: number;
+    annotationId: string | null;
+  } | null>(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [keyboardFocusZone, setKeyboardFocusZone] = useState<'original' | 'revision' | null>(null);
+  const revisionSplitRef = useRef<HTMLDivElement>(null);
+  const revisionParaScrollRef = useRef<HTMLDivElement>(null);
+  const activeParaTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Shared sticker library & per-doc archive stickers
+  const [customStickers, setCustomStickers] = useState<RevisionStickerDef[]>(loadCustomStickers);
+  const [archiveStickers, setArchiveStickers] = useState<RevisionArchiveStickerItem[]>(() =>
+    loadDocArchiveStickers(doc.id),
+  );
+  useEffect(() => {
+    setArchiveStickers(loadDocArchiveStickers(doc.id));
+  }, [doc.id]);
+  useEffect(() => {
+    saveCustomStickers(customStickers);
+  }, [customStickers]);
+  useEffect(() => {
+    saveDocArchiveStickers(doc.id, archiveStickers);
+  }, [doc.id, archiveStickers]);
+  const allStickers = useMemo(
+    () => [...JOURNAL_STRIP_STICKERS, ...DEFAULT_REVISION_STICKERS, ...customStickers],
+    [customStickers],
+  );
+
+  // Paragraph editing & dirty confirmation state in Revision Mode
+  const [editingParaStart, setEditingParaStart] = useState<number | null>(null);
+  const paraSessionRef = useRef<{
+    paraStart: number;
+    annId: string;
+    originalFullText: string;
+    originalParaText: string;
+    latestParaText: string;
+    dirty: boolean;
+  } | null>(null);
+  const [pendingParaConfirm, setPendingParaConfirm] = useState<{
+    paraStart: number;
+    annId: string;
+    originalFullText: string;
+    originalParaText: string;
+    latestParaText: string;
+    step: 'confirm' | 'pick-sticker';
+    revertConfirm: boolean;
+    pickedStickerId: string;
+    pickerTab: StickerCategory;
+    textOverlay: StickerTextStyle;
+    showTextCustomizer: boolean;
+    userTouchedColor: boolean;
+    nextAnnId?: string;
+  } | null>(null);
+
+  // Detect soft keyboard open/close via visualViewport so portrait split-screen
+  // adapts dynamically to whichever pane currently holds input focus.
+  useEffect(() => {
+    if (!revisionMode || typeof window === 'undefined') {
+      setKeyboardOpen(false);
+      return;
+    }
+    const baseHeightRef = { current: window.visualViewport?.height ?? window.innerHeight };
+    const checkViewport = () => {
+      const vv = window.visualViewport;
+      const currentH = vv ? vv.height : window.innerHeight;
+      if (currentH > baseHeightRef.current) {
+        baseHeightRef.current = currentH;
+      }
+      const delta = baseHeightRef.current - currentH;
+      setKeyboardOpen(delta > 120);
+    };
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', checkViewport);
+    window.addEventListener('resize', checkViewport);
+    return () => {
+      vv?.removeEventListener('resize', checkViewport);
+      window.removeEventListener('resize', checkViewport);
+    };
+  }, [revisionMode]);
   const [anchors, setAnchors] = useState<Record<string, AnchorGeometry>>({});
   const [cardRects, setCardRects] = useState<Record<string, { top: number; height: number }>>({});
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -543,9 +642,375 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     [doc.isSealed, selectionInfo],
   );
 
-  return (
-    <main ref={workspaceRef} data-tour="workspace-main" className={`arc-workspace ${isPhone ? 'is-phone' : ''}`}>
-      {!showPhonePreviewOnly && (
+  const isLandscapeSplit = deviceEnv?.isTabletLandscape ?? false;
+  const effectiveSplitRatio = useMemo(() => {
+    if (!revisionMode || isLandscapeSplit || !keyboardOpen) return splitRatio;
+    if (keyboardFocusZone === 'original') return Math.max(splitRatio, 0.72);
+    if (keyboardFocusZone === 'revision') return Math.min(splitRatio, 0.28);
+    return splitRatio;
+  }, [revisionMode, isLandscapeSplit, keyboardOpen, keyboardFocusZone, splitRatio]);
+
+  // Extract only paragraphs that contain annotations/revisions for Revision Mode
+  const annotatedParagraphs = useMemo(() => {
+    if (!revisionMode) return [];
+    const anns = doc.annotations
+      .filter((a) => a.status === 'open' || a.status === 'resolved' || a.status === 'accepted' || a.status === 'rejected')
+      .slice()
+      .sort((a, b) => a.anchorStart - b.anchorStart);
+    if (anns.length === 0) return [];
+
+    const paragraphs: Array<{ start: number; end: number; text: string }> = [];
+    const lines = currentText.split('\n');
+    let offset = 0;
+    let blockStart = -1;
+    let blockLines: string[] = [];
+    for (const line of lines) {
+      const lineStart = offset;
+      const lineEnd = offset + line.length;
+      if (line.trim().length > 0) {
+        if (blockStart === -1) blockStart = lineStart;
+        blockLines.push(line);
+      } else if (blockStart !== -1) {
+        paragraphs.push({
+          start: blockStart,
+          end: lineStart - 1,
+          text: blockLines.join('\n'),
+        });
+        blockStart = -1;
+        blockLines = [];
+      }
+      offset = lineEnd + 1;
+    }
+    if (blockStart !== -1) {
+      paragraphs.push({
+        start: blockStart,
+        end: currentText.length,
+        text: blockLines.join('\n'),
+      });
+    }
+
+    return paragraphs
+      .map((p) => ({
+        ...p,
+        anns: anns.filter((a) => a.anchorEnd >= p.start && a.anchorStart <= p.end),
+      }))
+      .filter((p) => p.anns.length > 0);
+  }, [revisionMode, doc.annotations, currentText]);
+
+  const scrollRevisionParaToAnn = useCallback((id: string) => {
+    const container = revisionParaScrollRef.current;
+    if (!container) return;
+    const el = container.querySelector(`[data-ann-id="${id}"]`) as HTMLElement | null;
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
+
+  const scrollRevisionParaToPos = useCallback((pos: number) => {
+    const container = revisionParaScrollRef.current;
+    if (!container) return;
+    const blocks = Array.from(container.querySelectorAll('[data-para-start]')) as HTMLElement[];
+    if (blocks.length === 0) return;
+    let best = blocks[0];
+    let bestDist = Infinity;
+    for (const blk of blocks) {
+      const pStart = Number(blk.getAttribute('data-para-start') ?? 0);
+      const dist = Math.abs(pStart - pos);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = blk;
+      }
+    }
+    best.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
+
+  const lpRevTimerRef = useRef<number | null>(null);
+  const lpRevStartRef = useRef<{ x: number; y: number } | null>(null);
+  const clearRevLp = () => {
+    if (lpRevTimerRef.current !== null) {
+      window.clearTimeout(lpRevTimerRef.current);
+      lpRevTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    if (!longPressMenu) return;
+    const onDocDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('.arc-longpress-capsule')) return;
+      setLongPressMenu(null);
+    };
+    document.addEventListener('pointerdown', onDocDown);
+    return () => document.removeEventListener('pointerdown', onDocDown);
+  }, [longPressMenu]);
+
+  useEffect(() => {
+    document.addEventListener('selectionchange', clearRevLp);
+    return () => document.removeEventListener('selectionchange', clearRevLp);
+  }, []);
+
+  const focusParaEditor = useCallback((paraStart: number) => {
+    setEditingParaStart(paraStart);
+    window.setTimeout(() => {
+      activeParaTextareaRef.current?.focus();
+    }, 40);
+  }, []);
+
+  const buildParaConfirmState = useCallback(
+    (
+      sess: NonNullable<typeof paraSessionRef.current>,
+      nextAnnId?: string,
+    ) => {
+      const defaultSticker = allStickers[0] ?? DEFAULT_REVISION_STICKERS[0];
+      return {
+        paraStart: sess.paraStart,
+        annId: sess.annId,
+        originalFullText: sess.originalFullText,
+        originalParaText: sess.originalParaText,
+        latestParaText: sess.latestParaText,
+        step: 'confirm' as const,
+        revertConfirm: false,
+        pickedStickerId: defaultSticker.id,
+        pickerTab: getStickerCategory(defaultSticker),
+        textOverlay: createDefaultStickerTextStyle(
+          defaultSticker,
+          sess.latestParaText.trim().slice(0, 18),
+        ),
+        showTextCustomizer: true,
+        userTouchedColor: false,
+        nextAnnId,
+      };
+    },
+    [allStickers],
+  );
+
+  const handleRevisionSelectNote = useCallback(
+    (nextId: string) => {
+      const sess = paraSessionRef.current;
+      if (sess && sess.dirty && !pendingParaConfirm) {
+        setPendingParaConfirm(buildParaConfirmState(sess, nextId));
+        return;
+      }
+      setSelectedId(nextId);
+    },
+    [pendingParaConfirm, buildParaConfirmState],
+  );
+
+  const splitContainerClass = revisionMode
+    ? `arc-revision-split ${isLandscapeSplit ? 'is-landscape' : 'is-portrait'} ${keyboardOpen ? 'is-keyboard-open' : ''}`
+    : '';
+
+  const renderAnnotatedParagraphContent = (p: {
+    start: number;
+    end: number;
+    text: string;
+    anns: typeof doc.annotations;
+  }) => {
+    const sorted = p.anns
+      .map((a) => ({
+        ann: a,
+        relStart: Math.max(0, a.anchorStart - p.start),
+        relEnd: Math.min(p.text.length, a.anchorEnd - p.start),
+      }))
+      .filter((r) => r.relEnd > r.relStart)
+      .sort((a, b) => a.relStart - b.relStart);
+
+    const nodes: React.ReactNode[] = [];
+    let cursor = 0;
+    for (const item of sorted) {
+      if (item.relStart > cursor) {
+        nodes.push(p.text.slice(cursor, item.relStart));
+      }
+      const start = Math.max(cursor, item.relStart);
+      if (item.relEnd > start) {
+        const cls =
+          (item.ann.type === 'comment' ? 'cm-arc-comment' : 'cm-arc-revision') +
+          (selectedId === item.ann.id ? ' cm-arc-selected' : '');
+        nodes.push(
+          <span
+            key={item.ann.id}
+            data-ann-id={item.ann.id}
+            className={cls}
+            onClick={(e) => {
+              e.stopPropagation();
+              onHaptic?.('selection');
+              setSelectedId(item.ann.id);
+            }}
+          >
+            {p.text.slice(start, item.relEnd)}
+          </span>,
+        );
+        cursor = item.relEnd;
+      }
+    }
+    if (cursor < p.text.length) {
+      nodes.push(p.text.slice(cursor));
+    }
+    return nodes;
+  };
+
+  const renderOriginalEditorPane = () => {
+    if (revisionMode) {
+      return (
+        <div
+          className="arc-revision-original-pane"
+          onFocusCapture={() => setKeyboardFocusZone('original')}
+          style={{
+            flex: `0 0 ${(effectiveSplitRatio * 100).toFixed(2)}%`,
+            minHeight: 0,
+            minWidth: 0,
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            background: 'transparent',
+          }}
+        >
+          <div
+            ref={revisionParaScrollRef}
+            className="arc-revision-paragraphs-scroll"
+            onContextMenu={(e) => {
+              if (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) return;
+              e.preventDefault();
+              const target = e.target as HTMLElement | null;
+              const annEl = target?.closest('[data-ann-id]') as HTMLElement | null;
+              const annId = annEl?.getAttribute('data-ann-id') ?? null;
+              onHaptic?.('medium');
+              if (annId) setSelectedId(annId);
+              setLongPressMenu({ x: e.clientX, y: e.clientY, annotationId: annId });
+            }}
+            onPointerDown={(e) => {
+              if (e.button !== 0 && e.pointerType === 'mouse') return;
+              const domSel = typeof window !== 'undefined' ? window.getSelection()?.toString() ?? '' : '';
+              if (domSel.length > 0) {
+                clearRevLp();
+                return;
+              }
+              clearRevLp();
+              lpRevStartRef.current = { x: e.clientX, y: e.clientY };
+              const target = e.target as HTMLElement | null;
+              const annEl = target?.closest('[data-ann-id]') as HTMLElement | null;
+              const annId = annEl?.getAttribute('data-ann-id') ?? null;
+              lpRevTimerRef.current = window.setTimeout(() => {
+                lpRevTimerRef.current = null;
+                const curDomSel = typeof window !== 'undefined' ? window.getSelection()?.toString() ?? '' : '';
+                if (curDomSel.length > 0) return;
+                onHaptic?.('medium');
+                if (annId) setSelectedId(annId);
+                setLongPressMenu({
+                  x: lpRevStartRef.current?.x ?? e.clientX,
+                  y: lpRevStartRef.current?.y ?? e.clientY,
+                  annotationId: annId,
+                });
+              }, 480);
+            }}
+            onPointerMove={(e) => {
+              if (!lpRevStartRef.current || lpRevTimerRef.current === null) return;
+              if (Math.hypot(e.clientX - lpRevStartRef.current.x, e.clientY - lpRevStartRef.current.y) > 8) {
+                clearRevLp();
+              }
+            }}
+            onPointerUp={clearRevLp}
+            onPointerCancel={clearRevLp}
+          >
+            {annotatedParagraphs.length === 0 ? (
+              <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                {settings.locale === 'zh-CN'
+                  ? '当前文档暂无批注或修订对应的段落'
+                  : 'No annotated or revised paragraphs in this document'}
+              </div>
+            ) : (
+              annotatedParagraphs.map((p) => {
+                const hasSelected = p.anns.some((a) => a.id === selectedId);
+                const isEditingThis = editingParaStart === p.start && !doc.isSealed;
+                return (
+                  <div
+                    key={p.start}
+                    data-para-start={p.start}
+                    className={`arc-revision-para-block ${hasSelected ? 'is-focused-para' : ''}`}
+                    onClick={() => {
+                      if (doc.isSealed || isEditingThis) return;
+                      const domSel = typeof window !== 'undefined' ? window.getSelection()?.toString() ?? '' : '';
+                      if (domSel.length > 0) return;
+                      paraSessionRef.current = {
+                        paraStart: p.start,
+                        annId: selectedId && p.anns.some((a) => a.id === selectedId) ? selectedId : p.anns[0].id,
+                        originalFullText: currentText,
+                        originalParaText: p.text,
+                        latestParaText: p.text,
+                        dirty: false,
+                      };
+                      focusParaEditor(p.start);
+                    }}
+                  >
+                    {isEditingThis ? (
+                      <textarea
+                        ref={activeParaTextareaRef}
+                        className="arc-revision-para-textarea"
+                        value={p.text}
+                        rows={Math.max(3, Math.min(8, p.text.split('\n').length + 1))}
+                        onChange={(e) => {
+                          const nextPara = e.target.value;
+                          const nextFull =
+                            currentText.slice(0, p.start) + nextPara + currentText.slice(p.end);
+                          if (paraSessionRef.current && paraSessionRef.current.paraStart === p.start) {
+                            paraSessionRef.current.dirty = nextPara !== paraSessionRef.current.originalParaText;
+                            paraSessionRef.current.latestParaText = nextPara;
+                          }
+                          onTextChange(nextFull);
+                        }}
+                        onBlur={() => {
+                          setEditingParaStart(null);
+                          const sess = paraSessionRef.current;
+                          if (sess && sess.paraStart === p.start && sess.dirty) {
+                            setPendingParaConfirm(buildParaConfirmState(sess));
+                          } else {
+                            paraSessionRef.current = null;
+                          }
+                        }}
+                      />
+                    ) : (
+                      renderAnnotatedParagraphContent(p)
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {!doc.officePreview && (
+            <MobileQuickFormatBar
+              isZh={settings.locale === 'zh-CN'}
+              inRevisionMode
+              readOnly={doc.isSealed}
+              activeFormat={activeFormat}
+              splitPreview={splitPreview}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              openAnnotationCount={openAnnotationCount}
+              phrasebankActive={mobilePbSheetOpen}
+              onUndo={() => onUndo?.()}
+              onRedo={() => onRedo?.()}
+              onInsertSnippet={handleQuickInsert}
+              onToggleFormat={() =>
+                onFormatChange?.(activeFormat === 'markdown' ? 'latex' : 'markdown')
+              }
+              onToggleSplitPreview={() => onToggleSplitPreview?.()}
+              onOpenAnnotations={() => onSetRevisionMode?.(false)}
+              onTogglePhrasebank={() => {
+                if (!pbSettings.enabled) {
+                  onUpdatePhrasebankSettings({ enabled: true, collapsed: false });
+                }
+                onSetCapsuleDismissed(false);
+                setMobilePbSheetOpen((v) => !v);
+              }}
+              onOpenCameraScan={() => onOpenCameraScan?.()}
+              onSaveMilestone={() => onSaveMilestone?.()}
+              onHaptic={(p) => onHaptic?.(p)}
+            />
+          )}
+        </div>
+      );
+    }
+
+    return (
       <div
         ref={editorScrollRef}
         className="arc-editor-pane"
@@ -666,17 +1131,98 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
             onHoverAnnotation={setHoveredId}
             onClickAnnotation={(id) => {
               setSelectedId(id);
-              onHaptic?.('light');
-              if (useMobileSheets) {
-                onSetMobileAnnotationSheetOpen?.(true);
-              }
+              onHaptic?.('selection');
               alignViewportToAnnotation(id, 'editor');
+            }}
+            onLongPressMenu={(info) => {
+              onHaptic?.('medium');
+              if (info.annotationId) {
+                setSelectedId(info.annotationId);
+              }
+              setLongPressMenu(info);
             }}
             onAnchorsMeasured={setAnchors}
             scrollContainerRef={editorScrollRef}
           />
         </div>
       </div>
+    );
+  };
+
+  return (
+    <main ref={workspaceRef} data-tour="workspace-main" className={`arc-workspace ${isPhone ? 'is-phone' : ''}`}>
+      {revisionMode ? (
+        <div ref={revisionSplitRef} className={splitContainerClass}>
+          {renderOriginalEditorPane()}
+          <ResizeSash
+            orientation={isLandscapeSplit ? 'vertical' : 'horizontal'}
+            title={settings.locale === 'zh-CN' ? '拖动调整分屏比例' : 'Drag to resize split'}
+            onPointerDown={(e) => {
+              const box = revisionSplitRef.current?.getBoundingClientRect();
+              const total = isLandscapeSplit ? (box?.width ?? window.innerWidth) : (box?.height ?? window.innerHeight);
+              const initialPx = splitRatio * total;
+              startResizeDrag({
+                event: e,
+                axis: isLandscapeSplit ? 'x' : 'y',
+                initialSize: initialPx,
+                min: total * 0.24,
+                max: total * 0.76,
+                onResize: (nextPx) => {
+                  setSplitRatio(Math.max(0.24, Math.min(0.76, nextPx / Math.max(1, total))));
+                },
+              });
+            }}
+          />
+          <div
+            style={{ flex: '1 1 0%', minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column' }}
+            onFocusCapture={(e) => {
+              setKeyboardFocusZone('revision');
+              const target = e.target as HTMLElement | null;
+              if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')) {
+                window.setTimeout(() => {
+                  target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                }, 120);
+              }
+            }}
+          >
+            <RevisionSplitWorkspace
+              docId={doc.id}
+              annotations={doc.annotations}
+              selectedId={selectedId}
+              documentText={currentText}
+              settings={settings}
+              effectiveAiPolicy={effectiveAiPolicy}
+              readOnly={doc.isSealed}
+              allStickers={allStickers}
+              archiveStickers={archiveStickers}
+              onAddCustomSticker={(stk) => setCustomStickers((prev) => [...prev, stk])}
+              onDeleteCustomSticker={(id) =>
+                setCustomStickers((prev) => prev.filter((s) => s.id !== id))
+              }
+              onAddArchiveSticker={(item) => setArchiveStickers((prev) => [...prev, item])}
+              onUpdateArchiveSticker={(archiveId, patch) =>
+                setArchiveStickers((prev) =>
+                  prev.map((a) => (a.id === archiveId ? { ...a, ...patch } : a)),
+                )
+              }
+              onSelect={handleRevisionSelectNote}
+              onLocate={(id) => {
+                scrollRevisionParaToAnn(id);
+              }}
+              onJumpToPosition={(pos) => {
+                scrollRevisionParaToPos(pos);
+              }}
+              onAcceptRevision={onAcceptRevision}
+              onRejectRevision={onRejectRevision}
+              onToggleResolveComment={onToggleResolveComment}
+              onReplyComment={onReplyComment}
+              onApplyAiSuggestion={onApplyAiSuggestion}
+              onHaptic={(p) => onHaptic?.(p)}
+            />
+          </div>
+        </div>
+      ) : (
+        !showPhonePreviewOnly && renderOriginalEditorPane()
       )}
 
       {showPhonePreviewOnly && (
@@ -886,33 +1432,312 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         onNotify={onNotify}
       />
 
-      {useMobileSheets && (
-        <MobileAnnotationSheet
-          open={mobileAnnotationSheetOpen}
-          annotations={doc.annotations}
-          selectedId={selectedId}
-          documentText={currentText}
-          settings={settings}
-          effectiveAiPolicy={effectiveAiPolicy}
-          readOnly={doc.isSealed}
-          onSelect={setSelectedId}
-          onLocate={(id) => {
-            const ann = doc.annotations.find((a) => a.id === id);
-            if (ann) {
-              documentEditorRef.current?.selectAndScrollTo(ann.anchorStart, ann.anchorEnd);
-            }
-          }}
-          onAcceptRevision={onAcceptRevision}
-          onRejectRevision={onRejectRevision}
-          onToggleResolveComment={onToggleResolveComment}
-          onReplyComment={onReplyComment}
-          onApplyAiSuggestion={onApplyAiSuggestion}
-          onHaptic={(p) => onHaptic?.(p)}
-          onClose={() => onSetMobileAnnotationSheetOpen?.(false)}
-        />
+      {pendingParaConfirm && (
+        <div className="arc-bb-modal-backdrop">
+          <div
+            className={`arc-bb-modal arc-para-confirm-modal${pendingParaConfirm.step === 'pick-sticker' ? ' is-wide' : ''}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {pendingParaConfirm.step === 'confirm' ? (
+              pendingParaConfirm.revertConfirm ? (
+                <>
+                  <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>
+                    {settings.locale === 'zh-CN' ? '二次确认：回退段落修改？' : 'Confirm Revert?'}
+                  </strong>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    {settings.locale === 'zh-CN'
+                      ? '确定要放弃并撤销刚才对该段落的修改，并重新聚焦该段落吗？'
+                      : 'Discard and revert your recent edits to this paragraph and refocus it?'}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="arc-btn"
+                      style={{ height: 30, fontSize: 12 }}
+                      onClick={() =>
+                        setPendingParaConfirm((prev) => (prev ? { ...prev, revertConfirm: false } : null))
+                      }
+                    >
+                      {settings.locale === 'zh-CN' ? '返回' : 'Back'}
+                    </button>
+                    <button
+                      type="button"
+                      className="arc-btn arc-btn-primary"
+                      style={{ height: 30, fontSize: 12, background: '#dc2626', borderColor: '#dc2626' }}
+                      onClick={() => {
+                        onHaptic?.('warning');
+                        onTextChange(pendingParaConfirm.originalFullText);
+                        const pStart = pendingParaConfirm.paraStart;
+                        paraSessionRef.current = null;
+                        setPendingParaConfirm(null);
+                        focusParaEditor(pStart);
+                      }}
+                    >
+                      {settings.locale === 'zh-CN' ? '确认回退' : 'Confirm Revert'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>
+                    {settings.locale === 'zh-CN' ? '确认保存刚才的修改？' : 'Save Paragraph Changes?'}
+                  </strong>
+                  <div className="arc-para-confirm-preview">
+                    {pendingParaConfirm.latestParaText}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="arc-btn"
+                      style={{ height: 30, fontSize: 12 }}
+                      onClick={() => {
+                        onHaptic?.('selection');
+                        const pStart = pendingParaConfirm.paraStart;
+                        setPendingParaConfirm(null);
+                        focusParaEditor(pStart);
+                      }}
+                    >
+                      {settings.locale === 'zh-CN' ? '取消' : 'Cancel'}
+                    </button>
+                    <button
+                      type="button"
+                      className="arc-btn"
+                      style={{ height: 30, fontSize: 12, color: '#dc2626' }}
+                      onClick={() => {
+                        onHaptic?.('warning');
+                        setPendingParaConfirm((prev) => (prev ? { ...prev, revertConfirm: true } : null));
+                      }}
+                    >
+                      {settings.locale === 'zh-CN' ? '取消并回退修改' : 'Cancel & Revert'}
+                    </button>
+                    <button
+                      type="button"
+                      className="arc-btn arc-btn-primary"
+                      style={{ height: 30, fontSize: 12 }}
+                      onClick={() => {
+                        onHaptic?.('light');
+                        setPendingParaConfirm((prev) => (prev ? { ...prev, step: 'pick-sticker' } : null));
+                      }}
+                    >
+                      {settings.locale === 'zh-CN' ? '选择贴纸保存' : 'Save with Sticker'}
+                    </button>
+                  </div>
+                </>
+              )
+            ) : (
+              (() => {
+                const isZhLocale = settings.locale === 'zh-CN';
+                const pickedSticker =
+                  allStickers.find((s) => s.id === pendingParaConfirm.pickedStickerId) ??
+                  allStickers[0] ??
+                  DEFAULT_REVISION_STICKERS[0];
+                return (
+                  <>
+                    <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>
+                      {isZhLocale ? '从贴纸库选择贴纸' : 'Choose a Sticker'}
+                    </strong>
+
+                    <div className="arc-sticker-preview-stage is-theme">
+                      <StickerVisual
+                        sticker={pickedSticker}
+                        textStyle={pendingParaConfirm.textOverlay}
+                        fallbackText={pendingParaConfirm.latestParaText}
+                        mode="preview"
+                        isZh={isZhLocale}
+                      />
+                    </div>
+
+                    <StickerPickerTabs
+                      allStickers={allStickers}
+                      selectedStickerId={pendingParaConfirm.pickedStickerId}
+                      activeTab={pendingParaConfirm.pickerTab}
+                      onTabChange={(tab) =>
+                        setPendingParaConfirm((prev) =>
+                          prev ? { ...prev, pickerTab: tab } : null,
+                        )
+                      }
+                      onSelect={(stk) => {
+                        onHaptic?.('selection');
+                        setPendingParaConfirm((prev) => {
+                          if (!prev) return null;
+                          const nextOverlay: StickerTextStyle = stk.defaultTextStyle
+                            ? {
+                                ...stk.defaultTextStyle,
+                                text: prev.textOverlay.text || stk.defaultTextStyle.text,
+                              }
+                            : prev.userTouchedColor
+                              ? prev.textOverlay
+                              : {
+                                  ...prev.textOverlay,
+                                  color: stk.defaultTextColor ?? prev.textOverlay.color,
+                                  strokeColor:
+                                    stk.defaultStrokeColor ?? prev.textOverlay.strokeColor,
+                                };
+                          return {
+                            ...prev,
+                            pickedStickerId: stk.id,
+                            textOverlay: nextOverlay,
+                          };
+                        });
+                      }}
+                      isZh={isZhLocale}
+                      surface="theme"
+                    />
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                        {isZhLocale ? '贴纸叠加文字与样式' : 'Overlay Text & Style'}
+                      </span>
+                      <button
+                        type="button"
+                        className="arc-sticker-chip is-theme"
+                        onClick={() =>
+                          setPendingParaConfirm((prev) =>
+                            prev
+                              ? { ...prev, showTextCustomizer: !prev.showTextCustomizer }
+                              : null,
+                          )
+                        }
+                      >
+                        {pendingParaConfirm.showTextCustomizer
+                          ? isZhLocale
+                            ? '收起样式'
+                            : 'Hide'
+                          : isZhLocale
+                            ? '展开样式'
+                            : 'Customize'}
+                      </button>
+                    </div>
+
+                    {pendingParaConfirm.showTextCustomizer && (
+                      <StickerTextStyleControls
+                        value={pendingParaConfirm.textOverlay}
+                        onChange={(nextStyle) =>
+                          setPendingParaConfirm((prev) =>
+                            prev ? { ...prev, textOverlay: nextStyle } : null,
+                          )
+                        }
+                        onColorTouched={() =>
+                          setPendingParaConfirm((prev) =>
+                            prev ? { ...prev, userTouchedColor: true } : null,
+                          )
+                        }
+                        draftFallbackText={pendingParaConfirm.latestParaText}
+                        isZh={isZhLocale}
+                        surface="theme"
+                        compact
+                      />
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                      <button
+                        type="button"
+                        className="arc-btn"
+                        style={{ height: 30, fontSize: 12 }}
+                        onClick={() =>
+                          setPendingParaConfirm((prev) =>
+                            prev ? { ...prev, step: 'confirm' } : null,
+                          )
+                        }
+                      >
+                        {isZhLocale ? '返回' : 'Back'}
+                      </button>
+                      <button
+                        type="button"
+                        className="arc-btn arc-btn-primary"
+                        style={{ height: 30, fontSize: 12 }}
+                        onClick={() => {
+                          const ann = doc.annotations.find(
+                            (a) => a.id === pendingParaConfirm.annId,
+                          );
+                          setArchiveStickers((prev) => [
+                            ...prev,
+                            {
+                              id: `arcstk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                              annId: pendingParaConfirm.annId,
+                              stickerId: pendingParaConfirm.pickedStickerId,
+                              draftText: pendingParaConfirm.latestParaText,
+                              snippet: ann?.originalText.slice(0, 24) || ann?.author || '段落修改',
+                              savedAt: Date.now(),
+                              textOverlay: pendingParaConfirm.textOverlay,
+                            },
+                          ]);
+                          const nextAnn = pendingParaConfirm.nextAnnId;
+                          paraSessionRef.current = null;
+                          setPendingParaConfirm(null);
+                          if (nextAnn) {
+                            setSelectedId(nextAnn);
+                          }
+                        }}
+                      >
+                        {isZhLocale ? '就要这个' : 'Use This'}
+                      </button>
+                    </div>
+                  </>
+                );
+              })()
+            )}
+          </div>
+        </div>
       )}
 
-      {isPhone && !isFullscreen && !doc.officePreview && (
+      {longPressMenu && (
+        <div
+          className="arc-longpress-backdrop"
+          onClick={() => setLongPressMenu(null)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setLongPressMenu(null);
+          }}
+        >
+          <div
+            className="arc-longpress-capsule"
+            style={{
+              left: Math.max(12, Math.min((typeof window !== 'undefined' ? window.innerWidth : 400) - 240, longPressMenu.x - 90)),
+              top: Math.max(56, Math.min((typeof window !== 'undefined' ? window.innerHeight : 800) - 70, longPressMenu.y - 54)),
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="arc-btn arc-btn-primary"
+              style={{ height: 30, fontSize: 12, borderRadius: 999 }}
+              onClick={() => {
+                onHaptic?.('medium');
+                if (longPressMenu.annotationId) {
+                  setSelectedId(longPressMenu.annotationId);
+                }
+                onSetRevisionMode?.(!revisionMode);
+                setLongPressMenu(null);
+              }}
+            >
+              {revisionMode
+                ? settings.locale === 'zh-CN'
+                  ? '退出修订模式'
+                  : 'Exit Revision Mode'
+                : settings.locale === 'zh-CN'
+                  ? '进入修订模式'
+                  : 'Enter Revision Mode'}
+            </button>
+            {longPressMenu.annotationId && (
+              <button
+                type="button"
+                className="arc-btn"
+                style={{ height: 30, fontSize: 12, borderRadius: 999 }}
+                onClick={() => {
+                  onHaptic?.('selection');
+                  setSelectedId(longPressMenu.annotationId);
+                  setLongPressMenu(null);
+                }}
+              >
+                {settings.locale === 'zh-CN' ? '选中批注' : 'Focus Note'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isPhone && !revisionMode && !isFullscreen && !doc.officePreview && (
         <MobileQuickFormatBar
           isZh={settings.locale === 'zh-CN'}
           readOnly={doc.isSealed}
@@ -929,7 +1754,7 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
             onFormatChange?.(activeFormat === 'markdown' ? 'latex' : 'markdown')
           }
           onToggleSplitPreview={() => onToggleSplitPreview?.()}
-          onOpenAnnotations={() => onSetMobileAnnotationSheetOpen?.(true)}
+          onOpenAnnotations={() => onSetRevisionMode?.(true)}
           onTogglePhrasebank={() => {
             if (!pbSettings.enabled) {
               onUpdatePhrasebankSettings({ enabled: true, collapsed: false });
