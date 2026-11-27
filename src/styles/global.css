@@ -3892,6 +3892,7 @@ html.is-resizing .arc-shell-resizer {
 .arc-tour-root {
   position: fixed;
   inset: 0;
+  padding-top: env(safe-area-inset-top, 0px);
   z-index: 350;
   pointer-events: none;
 }
@@ -3958,6 +3959,11 @@ html.is-resizing .arc-shell-resizer {
 
 .arc-tour-card.is-translucent {
   opacity: 0.24;
+  pointer-events: none;
+}
+
+.arc-tour-card.is-translucent .arc-tour-translucent-btn {
+  pointer-events: auto;
 }
 
 .arc-tour-translucent-btn.is-active {
@@ -3974,6 +3980,7 @@ html.is-resizing .arc-shell-resizer {
   padding: 10px 13px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-subtle);
+  flex-shrink: 0;
 }
 
 .arc-tour-card-body {
@@ -4034,6 +4041,7 @@ html.is-resizing .arc-shell-resizer {
   padding: 10px 13px;
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-subtle);
+  flex-shrink: 0;
 }
 
 .arc-tour-action-hint-btn,

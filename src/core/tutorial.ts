@@ -756,6 +756,7 @@ export function computeGuideCardPlacement(params: {
   preferredPlacement?: 'auto' | 'top' | 'bottom' | 'left' | 'right';
   forcePlacement?: 'bottom';
   margin?: number;
+  topMargin?: number;
   gap?: number;
 }): {
   top: number;
@@ -772,13 +773,15 @@ export function computeGuideCardPlacement(params: {
     preferredPlacement = 'auto',
     forcePlacement,
     margin = 12,
+    topMargin,
     gap = 12,
   } = params;
 
+  const effectiveTopMargin = topMargin ?? margin;
   const maxLeft = Math.max(margin, containerWidth - cardWidth - margin);
-  const maxTop = Math.max(margin, containerHeight - cardHeight - margin);
+  const maxTop = Math.max(effectiveTopMargin, containerHeight - cardHeight - margin);
   const clampLeft = (v: number) => Math.max(margin, Math.min(maxLeft, Math.round(v)));
-  const clampTop = (v: number) => Math.max(margin, Math.min(maxTop, Math.round(v)));
+  const clampTop = (v: number) => Math.max(effectiveTopMargin, Math.min(maxTop, Math.round(v)));
 
   if (forcePlacement === 'bottom') {
     const centerLeft = cutout
@@ -802,7 +805,7 @@ export function computeGuideCardPlacement(params: {
   const cutRight = cutout.left + cutout.width;
   const cutBottom = cutout.top + cutout.height;
 
-  const spaceTop = cutout.top - margin;
+  const spaceTop = cutout.top - effectiveTopMargin;
   const spaceBottom = containerHeight - cutBottom - margin;
   const spaceLeft = cutout.left - margin;
   const spaceRight = containerWidth - cutRight - margin;
@@ -837,13 +840,22 @@ export function computeGuideCardPlacement(params: {
     };
   }
   if (chosen === 'top') {
-    const availableTop = cutout.top - margin - gap;
-    const rawTop = fits.top ? cutout.top - cardHeight - gap : margin;
+    const availableTop = cutout.top - effectiveTopMargin - gap;
+    const rawTop = fits.top ? cutout.top - cardHeight - gap : effectiveTopMargin;
+    const clampedTop = Math.max(
+      effectiveTopMargin,
+      Math.min(
+        Math.max(effectiveTopMargin, cutout.top - cardHeight - gap),
+        clampTop(rawTop),
+      ),
+    );
     return {
-      top: clampTop(rawTop),
+      top: clampedTop,
       left: clampLeft(cutout.left + cutout.width / 2 - cardWidth / 2),
       placement: 'top',
-      maxHeight: !fits.top && availableTop >= 150 ? availableTop : undefined,
+      // Always cap maxHeight to availableTop when placed above a cutout so ResizeObserver
+      // measuring the constrained card never drops maxHeight and causes it to re-expand over the cutout.
+      maxHeight: availableTop >= 120 ? availableTop : undefined,
     };
   }
   if (chosen === 'right') {

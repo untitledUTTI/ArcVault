@@ -203,6 +203,7 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
   const rootRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 1280, height: 800 });
+  const [safeTopInset, setSafeTopInset] = useState(0);
   const [cardSize, setCardSize] = useState({ width: 390, height: 240 });
   const [cutout, setCutout] = useState<SpotlightRect | null>(null);
   const [actionGateFallbackUnlocked, setActionGateFallbackUnlocked] = useState(false);
@@ -284,6 +285,8 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
     const rootRect = rootEl.getBoundingClientRect();
     const cw = Math.max(1, Math.round(rootRect.width));
     const ch = Math.max(1, Math.round(rootRect.height));
+    const parsedSafeTop = Math.round(parseFloat(window.getComputedStyle(rootEl).paddingTop) || 0);
+    setSafeTopInset((prev) => (prev === parsedSafeTop ? prev : parsedSafeTop));
     setContainerSize((prev) =>
       prev.width === cw && prev.height === ch ? prev : { width: cw, height: ch },
     );
@@ -368,6 +371,7 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
     const t1 = window.setTimeout(measureSpotlight, 70);
     const t2 = window.setTimeout(measureSpotlight, 200);
     const t3 = window.setTimeout(measureSpotlight, 380);
+    const t4 = window.setTimeout(measureSpotlight, 520);
 
     const onViewportChange = () => measureSpotlight();
     const onTransitionEnd = () => {
@@ -405,6 +409,7 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
       window.clearTimeout(t1);
       window.clearTimeout(t2);
       window.clearTimeout(t3);
+      window.clearTimeout(t4);
       window.removeEventListener('resize', onViewportChange);
       window.removeEventListener('scroll', onViewportChange, true);
       document.removeEventListener('transitionend', onTransitionEnd, true);
@@ -1495,6 +1500,7 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
     preferredPlacement: step.preferredPlacement ?? 'auto',
     forcePlacement: deviceEnv.isPhone && step.phoneForceBottom ? 'bottom' : undefined,
     margin: isCompact ? 10 : 14,
+    topMargin: (isCompact ? 10 : 14) + safeTopInset,
     gap: 12,
   });
 

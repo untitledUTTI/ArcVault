@@ -236,6 +236,37 @@ describe('Live In-App Spotlight Tutorial & First-Run Warning Gate', () => {
     expect(aboveBottomSheet.placement).toBe('top');
     expect(aboveBottomSheet.top).toBe(10);
     expect(aboveBottomSheet.maxHeight).toBe(280 - 10 - 12);
+
+    // Re-measuring with the constrained height must keep maxHeight (prevents ResizeObserver feedback loop)
+    const afterResizeMeasure = computeGuideCardPlacement({
+      containerWidth: 390,
+      containerHeight: 667,
+      cutout: { top: 280, left: 0, width: 390, height: 387 },
+      cardWidth: 350,
+      cardHeight: aboveBottomSheet.maxHeight!,
+      preferredPlacement: 'left',
+      margin: 10,
+      gap: 12,
+    });
+    expect(afterResizeMeasure.placement).toBe('top');
+    expect(afterResizeMeasure.maxHeight).toBe(280 - 10 - 12);
+    expect(afterResizeMeasure.top + afterResizeMeasure.maxHeight!).toBeLessThan(280);
+
+    // Tablet portrait with safe-area top inset keeps card below status bar and above bottom sheet
+    const tabletPortrait = computeGuideCardPlacement({
+      containerWidth: 820,
+      containerHeight: 1120,
+      cutout: { top: 470, left: 30, width: 760, height: 650 },
+      cardWidth: 360,
+      cardHeight: 340,
+      preferredPlacement: 'left',
+      margin: 10,
+      topMargin: 34,
+      gap: 12,
+    });
+    expect(tabletPortrait.placement).toBe('top');
+    expect(tabletPortrait.top).toBeGreaterThanOrEqual(34);
+    expect(tabletPortrait.top + 340).toBeLessThanOrEqual(470 - 12);
   });
 
   it('marks designated modal/workspace steps to force bottom placement on phone', () => {

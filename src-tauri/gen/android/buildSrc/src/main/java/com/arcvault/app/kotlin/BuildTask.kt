@@ -23,44 +23,40 @@ abstract class BuildTask : DefaultTask() {
 
     @TaskAction
     fun assemble() {
-        val executable = """npm""";
-        try {
-            runTauriCli(executable)
-        } catch (e: Exception) {
-            if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-                // Try different Windows-specific extensions
-                val fallbacks = listOf(
-                    "$executable.exe",
-                    "$executable.cmd",
-                    "$executable.bat",
-                )
-
-                var lastException: Exception = e
-                for (fallback in fallbacks) {
-                    try {
-                        runTauriCli(fallback)
-                        return
-                    } catch (fallbackException: Exception) {
-                        lastException = fallbackException
-                    }
-                }
-                throw lastException
-            } else {
-                throw e;
-            }
-        }
+        runTauriCli()
     }
 
-    fun runTauriCli(executable: String) {
+    fun runTauriCli() {
         val rootDirRel = rootDirRel ?: throw GradleException("rootDirRel cannot be null")
         val target = target ?: throw GradleException("target cannot be null")
         val release = release ?: throw GradleException("release cannot be null")
-        val args = listOf("run", "--", "tauri", "android", "android-studio-script");
+
+        val userHome = System.getProperty("user.home") ?: ""
+        val extraPaths = listOf(
+            "D:\\Program Files\\nodejs",
+            "C:\\Program Files\\nodejs",
+            "C:\\Program Files (x86)\\nodejs",
+            "$userHome\\.cargo\\bin",
+            "$userHome\\AppData\\Roaming\\npm"
+        ).filter { File(it).exists() }
+
+        val isWindows = Os.isFamily(Os.FAMILY_WINDOWS)
+        val sysPath = System.getenv("PATH") ?: System.getenv("Path") ?: ""
+        val newPath = (extraPaths + listOf(sysPath)).joinToString(File.pathSeparator)
 
         execOperations.exec {
             workingDir(File(projectDir, rootDirRel))
-            executable(executable)
-            args(args)
+            if (isWindows) {
+                executable("cmd.exe")
+                args("/c", "npm", "run", "--", "tauri", "android", "android-studio-script")
+            } else {
+                executable("npm")
+                args("run", "--", "tauri", "android", "android-studio-script")
+            }
+
+            environment("PATH", newPath)
+            environment("Path", newPath)
+
             if (logger.isEnabled(LogLevel.DEBUG)) {
                 args("-vv")
             } else if (logger.isEnabled(LogLevel.INFO)) {
