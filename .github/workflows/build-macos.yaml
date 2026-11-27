@@ -1,19 +1,22 @@
 name: 'build-macos'
 
 on:
-  workflow_dispatch:   # 允许在 GitHub 网页上手动点击运行
+  workflow_dispatch:
+  push:
+    branches: [release]
+    tags:
+      - 'v*'
 
 jobs:
   build-macos:
     permissions:
-      contents: write   # 允许创建 Release
+      contents: write          # 允许创建/更新 Release
     runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          # 一次编译，同时生成 Intel 和 Apple Silicon 通用版本
-          - target: universal-apple-darwin
+          - target: universal-apple-darwin   # 通用二进制（Intel + Apple Silicon）
     steps:
       - uses: actions/checkout@v4
 
@@ -21,19 +24,59 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
+          cache: npm          # 自动缓存 node_modules 依赖，加速后续构建
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
       - name: Install frontend dependencies
-        run: npm install   # 如果你用 pnpm 或 yarn，请自行替换
+        run: npm install
+
+      - name: Read version info
+        id: meta
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=macos-v${VERSION}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Build macOS app
-        uses: tauri-apps/tauri-action@v1
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: --target universal-apple-darwin   # 通用二进制，Intel / M 系列都能跑
-          releaseDraft: true                       # 先存为草稿 Release，确认无误后再手动发布
+          args: --target universal-apple-darwin
+          releaseDraft: true
+
+      - name: Collect artifacts (versioned)
+        env:
+          SHORT_SHA: ${{ steps.meta.outputs.short_sha }}
+        run: |
+          mkdir -p dist
+          # 拷贝并重命名 .dmg
+          find src-tauri/target -path "*/bundle/dmg/*.dmg" -type f | while read -r f; do
+            base=$(basename "$f" .dmg)
+            cp "$f" "dist/${base}_${SHORT_SHA}.dmg"
+          done
+          # 把 .app 压成 zip（ditto 保留 bundle 元数据/符号链接）
+          find src-tauri/target -path "*/bundle/macos/*.app" -type d | while read -r app; do
+            base=$(basename "$app" .app)
+            ditto -c -k --sequesterRsrc --keepParent "$app" "dist/${base}_${SHORT_SHA}.zip"
+          done
+          echo "=== dist 内容 ==="
+          ls -lh dist/
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: dist/*
+          if-no-files-found: error
