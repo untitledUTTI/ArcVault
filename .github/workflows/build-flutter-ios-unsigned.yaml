@@ -1,0 +1,89 @@
+name: 'build-flutter-ios-unsigned'
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [release]
+    paths:
+      - 'mobile_flutter/**'
+      - '.github/workflows/build-flutter-ios-unsigned.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    # Flutter 对 Xcode 版本有要求，macos-15 通常带 Xcode 16+
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: mobile_flutter
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 关键：固定 Flutter 版本，避免 CI 上自动升级导致构建漂移
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.50.1'   # ⚠️ 改成你本地验证过的版本
+          channel: stable
+          cache: true
+
+      # 缓存 CocoaPods，显著缩短 pod install 时间（Flutter iOS CI 70% 耗时在此）
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            mobile_flutter/ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('mobile_flutter/ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      # 避坑：如果 Generated.xcconfig 等机器生成文件被误提交，
+      # 它们可能包含 Windows 本地路径，导致 pod install 失败。
+      # 先删除，让 Flutter 在构建时重新生成。
+      - name: Clean potentially contaminated generated files
+        run: |
+          rm -f ios/Flutter/Generated.xcconfig
+          rm -f ios/Flutter/flutter_export_environment.sh
+          rm -f ios/Runner/GeneratedPluginRegistrant.h
+          rm -f ios/Runner/GeneratedPluginRegistrant.m
+
+      # 可选但推荐：CI 中使用 --deployment 防止 Podfile.lock 漂移
+      - name: Pod install (deterministic)
+        working-directory: mobile_flutter/ios
+        run: pod install --deployment --repo-update
+
+      # 构建未签名归档（不会导出 IPA）
+      - name: Build iOS archive (unsigned)
+        run: flutter build ipa --release --no-codesign
+
+      # 从 xcarchive 手动打包成标准 IPA（Payload/Runner.app）
+      - name: Package unsigned IPA
+        run: |
+          ARCHIVE_APP="build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app"
+          if [ ! -d "$ARCHIVE_APP" ]; then
+            echo "::error::未找到归档的 Runner.app，请检查 build 日志"
+            exit 1
+          fi
+
+          mkdir -p Payload
+          cp -R "$ARCHIVE_APP" Payload/
+          ditto -c -k --sequesterRsrc --keepParent Payload Runner-unsigned.ipa
+
+          echo "IPA 已生成：$(ls -lh Runner-unsigned.ipa)"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-ios-unsigned-ipa
+          # ⚠️ artifact path 相对于仓库根目录，不是 working-directory
+          path: mobile_flutter/Runner-unsigned.ipa
+          if-no-files-found: error
