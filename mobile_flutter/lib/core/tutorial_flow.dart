@@ -576,7 +576,7 @@ class TutorialFlow {
           moduleId: TutorialModuleId.academicAi,
           title: '切换文档级三档 AI 隐私锁',
           description:
-              '编辑器顶部信息栏集成了当前文档的封面保护状态、AI 隐私闸门与 Skills 状态。点击高亮区域中的「AI 隐私锁」标签即可在「云端/本地 → 仅本地 Ollama → 已禁止 AI」间实时切换。请点击一次试试：',
+              '编辑器顶部信息栏集成了当前文档的封面保护状态、AI 隐私闸门与 Skills 状态。点击高亮区域中的「AI 隐私锁」标签即可在「云端/本地 → 仅本地模型 → 已禁止 AI」间实时切换。请点击一次试试：',
           scene: TutorialSceneId.editorAiBar,
           targetIds: [TutorialTargetId.editorAiBar],
           preferredPlacement: SpotlightPlacement.bottom,
@@ -687,7 +687,7 @@ class TutorialFlow {
           moduleId: TutorialModuleId.themesMultidevice,
           title: 'AI 模型、触控滚动手柄与目录管理设置',
           description:
-              '设置中心已切换到「AI 与 Skills」页签：可配置云端/Ollama 接口与 Markdown Skill；顶部标签还可进入「字体排版」「目录与归档」「触控与多端」（定制右侧 TouchScrollScrubber 滚动手柄形状与触感强度）。',
+              '设置中心已切换到「AI 与 Skills」页签：可配置云端/本地模型接口与 Markdown Skill；顶部标签还可进入「字体排版」「目录与归档」「触控与多端」（定制右侧 TouchScrollScrubber 滚动手柄形状与触感强度）。',
           scene: TutorialSceneId.settingsAi,
           targetIds: [TutorialTargetId.settingsModal],
           preferredPlacement: SpotlightPlacement.bottom,

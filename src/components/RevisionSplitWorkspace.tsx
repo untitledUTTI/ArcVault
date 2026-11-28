@@ -37,12 +37,15 @@ import {
 import { StickerPickerTabs } from './StickerPickerTabs';
 import { StickerTextStyleControls } from './StickerTextStyleControls';
 import { StickerOverlayText, StickerVisual } from './StickerVisual';
+import { registerBackHandler, shouldStartBoardPan } from '../platform/backProtection';
 import type {
   AiPrivacyPolicy,
   AnnotationItem,
   AppSettings,
   HapticPattern,
 } from '../types/archive';
+
+const BOARD_DRAG_THRESHOLD = 6;
 
 interface RevisionSplitWorkspaceProps {
   docId: string;
@@ -287,8 +290,70 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
   };
 
   // Blackboard pan & two-finger pinch zoom
-  const boardDragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const boardDragRef = useRef<{
+    x: number;
+    y: number;
+    panX: number;
+    panY: number;
+    moved: boolean;
+  } | null>(null);
   const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
+  const boardDidDragRef = useRef(false);
+  const boardDidDragResetTimerRef = useRef<number | null>(null);
+  const [isBoardDragging, setIsBoardDragging] = useState(false);
+
+  const markBoardDragged = () => {
+    boardDidDragRef.current = true;
+    if (boardDidDragResetTimerRef.current !== null) {
+      window.clearTimeout(boardDidDragResetTimerRef.current);
+      boardDidDragResetTimerRef.current = null;
+    }
+    clearStickerLp();
+  };
+
+  const finishBoardDrag = () => {
+    const didMove = Boolean(boardDragRef.current?.moved);
+    pinchRef.current = null;
+    boardDragRef.current = null;
+    setIsBoardDragging(false);
+    if (didMove || boardDidDragRef.current) {
+      if (boardDidDragResetTimerRef.current !== null) {
+        window.clearTimeout(boardDidDragResetTimerRef.current);
+      }
+      boardDidDragResetTimerRef.current = window.setTimeout(() => {
+        boardDidDragRef.current = false;
+        boardDidDragResetTimerRef.current = null;
+      }, 140);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (boardDidDragResetTimerRef.current !== null) {
+        window.clearTimeout(boardDidDragResetTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!blackboardMode) return;
+    return registerBackHandler(() => {
+      if (editingStickerArchive) {
+        setEditingStickerArchive(null);
+        return true;
+      }
+      if (viewingStickerArchive) {
+        setViewingStickerArchive(null);
+        return true;
+      }
+      if (stickerLibraryOpen) {
+        setStickerLibraryOpen(false);
+        return true;
+      }
+      setBlackboardMode(false);
+      return true;
+    }, 60);
+  }, [blackboardMode, editingStickerArchive, viewingStickerArchive, stickerLibraryOpen]);
 
   const handleBoardTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (e.touches.length === 2) {
@@ -296,14 +361,18 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       pinchRef.current = { dist: Math.hypot(dx, dy), zoom: boardZoom };
       boardDragRef.current = null;
+      setIsBoardDragging(false);
+      markBoardDragged();
     } else if (e.touches.length === 1) {
-      const target = e.target as HTMLElement;
-      if (target.closest('button, input, .arc-bb-modal')) return;
+      const target = e.target as HTMLElement | null;
+      if (!shouldStartBoardPan(target)) return;
+      boardDidDragRef.current = false;
       boardDragRef.current = {
         x: e.touches[0].clientX,
         y: e.touches[0].clientY,
         panX: boardPan.x,
         panY: boardPan.y,
+        moved: false,
       };
     }
   };
@@ -317,35 +386,61 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
         0.5,
         Math.min(1.9, pinchRef.current.zoom * (dist / Math.max(1, pinchRef.current.dist))),
       );
+      markBoardDragged();
       setBoardZoom(Number(nextZoom.toFixed(2)));
     } else if (e.touches.length === 1 && boardDragRef.current) {
       const dx = e.touches[0].clientX - boardDragRef.current.x;
       const dy = e.touches[0].clientY - boardDragRef.current.y;
-      setBoardPan({ x: boardDragRef.current.panX + dx, y: boardDragRef.current.panY + dy });
+      if (!boardDragRef.current.moved) {
+        if (Math.hypot(dx, dy) < BOARD_DRAG_THRESHOLD) return;
+        boardDragRef.current.moved = true;
+        setIsBoardDragging(true);
+        markBoardDragged();
+      }
+      setBoardPan({
+        x: boardDragRef.current.panX + dx,
+        y: boardDragRef.current.panY + dy,
+      });
     }
   };
 
   const handleBoardTouchEnd = () => {
-    pinchRef.current = null;
-    boardDragRef.current = null;
+    finishBoardDrag();
   };
 
   const handleBoardPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType === 'touch') return;
-    const target = e.target as HTMLElement;
-    if (target.closest('button, input, .arc-bb-modal')) return;
-    boardDragRef.current = { x: e.clientX, y: e.clientY, panX: boardPan.x, panY: boardPan.y };
+    const target = e.target as HTMLElement | null;
+    if (!shouldStartBoardPan(target)) return;
+    boardDidDragRef.current = false;
+    boardDragRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      panX: boardPan.x,
+      panY: boardPan.y,
+      moved: false,
+    };
   };
 
   const handleBoardPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType === 'touch' || !boardDragRef.current) return;
     const dx = e.clientX - boardDragRef.current.x;
     const dy = e.clientY - boardDragRef.current.y;
-    setBoardPan({ x: boardDragRef.current.panX + dx, y: boardDragRef.current.panY + dy });
+    if (!boardDragRef.current.moved) {
+      if (Math.hypot(dx, dy) < BOARD_DRAG_THRESHOLD) return;
+      boardDragRef.current.moved = true;
+      setIsBoardDragging(true);
+      markBoardDragged();
+    }
+    setBoardPan({
+      x: boardDragRef.current.panX + dx,
+      y: boardDragRef.current.panY + dy,
+    });
   };
 
-  const handleBoardPointerUp = () => {
-    boardDragRef.current = null;
+  const handleBoardPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch') return;
+    finishBoardDrag();
   };
 
   const handleAiRewrite = async (ann: AnnotationItem) => {
@@ -444,6 +539,10 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
                 : `rotate(${tiltDeg}deg)`,
             }}
             onClick={() => {
+              if (boardDidDragRef.current) {
+                boardDidDragRef.current = false;
+                return;
+              }
               if (ann.id === current?.id) {
                 onHaptic('light');
                 setBlackboardMode(false);
@@ -498,7 +597,6 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
 
                 const stickerPointerHandlers = {
                   onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
-                    e.stopPropagation();
                     clearStickerLp();
                     stickerLpTriggeredRef.current = false;
                     stickerLpStartRef.current = { x: e.clientX, y: e.clientY };
@@ -530,6 +628,10 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
                   },
                   onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
                     e.stopPropagation();
+                    if (boardDidDragRef.current) {
+                      boardDidDragRef.current = false;
+                      return;
+                    }
                     if (stickerLpTriggeredRef.current) {
                       stickerLpTriggeredRef.current = false;
                       return;
@@ -621,9 +723,11 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
         onTouchStart={handleBoardTouchStart}
         onTouchMove={handleBoardTouchMove}
         onTouchEnd={handleBoardTouchEnd}
+        onTouchCancel={handleBoardTouchEnd}
         onPointerDown={handleBoardPointerDown}
         onPointerMove={handleBoardPointerMove}
         onPointerUp={handleBoardPointerUp}
+        onPointerCancel={handleBoardPointerUp}
       >
         <div className="arc-blackboard-toolbar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
@@ -689,7 +793,7 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
 
         <div className="arc-blackboard-viewport">
           <div
-            className="arc-caseboard-world"
+            className={`arc-caseboard-world ${isBoardDragging ? 'is-dragging' : ''}`}
             style={{
               transform: `translate3d(${boardPan.x}px, ${boardPan.y}px, 0) scale(${boardZoom})`,
             }}

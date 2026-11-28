@@ -7,7 +7,7 @@ class AiPrivacyBlockedException implements Exception {
   AiPrivacyBlockedException(this.policy, this.provider)
       : message = policy == AiPrivacyPolicy.disabled
             ? '当前文档或空间已完全禁止 AI 访问（仅本地规则分析可用）。'
-            : '隐私保护拦截：当前文档锁定为「仅本地 AI (${policy.wire})」，已阻止将文本发送至云端接口 ($provider)。请改用本地 Ollama 或离线智能引擎。';
+            : '隐私保护拦截：当前文档锁定为「仅本地 AI (${policy.wire})」，已阻止将文本发送至云端接口 ($provider)。请改用本地模型或离线智能引擎。';
 
   final AiPrivacyPolicy policy;
   final String provider;
@@ -16,6 +16,138 @@ class AiPrivacyBlockedException implements Exception {
   @override
   String toString() => message;
 }
+
+class AiEndpointPreset {
+  const AiEndpointPreset({
+    required this.id,
+    required this.labelZh,
+    required this.labelEn,
+    required this.endpoint,
+    required this.model,
+    this.badgeZh,
+    this.badgeEn,
+  });
+
+  final String id;
+  final String labelZh;
+  final String labelEn;
+  final String endpoint;
+  final String model;
+  final String? badgeZh;
+  final String? badgeEn;
+}
+
+const List<AiEndpointPreset> kAiCloudFreePresets = [
+  AiEndpointPreset(
+    id: 'sf-qwen25-7b',
+    labelZh: '硅基流动 · Qwen2.5-7B',
+    labelEn: 'SiliconFlow · Qwen2.5-7B',
+    endpoint: 'https://api.siliconflow.cn/v1',
+    model: 'Qwen/Qwen2.5-7B-Instruct',
+    badgeZh: '免费',
+    badgeEn: 'Free',
+  ),
+  AiEndpointPreset(
+    id: 'sf-deepseek-r1-7b',
+    labelZh: '硅基流动 · DeepSeek-R1-7B',
+    labelEn: 'SiliconFlow · DeepSeek-R1-7B',
+    endpoint: 'https://api.siliconflow.cn/v1',
+    model: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B',
+    badgeZh: '免费·推理',
+    badgeEn: 'Free·Reasoning',
+  ),
+  AiEndpointPreset(
+    id: 'zhipu-glm4-flash',
+    labelZh: '智谱 AI · GLM-4-Flash',
+    labelEn: 'Zhipu AI · GLM-4-Flash',
+    endpoint: 'https://open.bigmodel.cn/api/paas/v4',
+    model: 'glm-4-flash',
+    badgeZh: '免费',
+    badgeEn: 'Free',
+  ),
+  AiEndpointPreset(
+    id: 'modelscope-qwen25-72b',
+    labelZh: '魔搭 · Qwen2.5-72B',
+    labelEn: 'ModelScope · Qwen2.5-72B',
+    endpoint: 'https://api-inference.modelscope.cn/v1',
+    model: 'Qwen/Qwen2.5-72B-Instruct',
+    badgeZh: '每日免费',
+    badgeEn: 'Daily Free',
+  ),
+  AiEndpointPreset(
+    id: 'hunyuan-lite',
+    labelZh: '腾讯混元 · Hunyuan-Lite',
+    labelEn: 'Tencent Hunyuan-Lite',
+    endpoint: 'https://api.hunyuan.cloud.tencent.com/v1',
+    model: 'hunyuan-lite',
+    badgeZh: '免费',
+    badgeEn: 'Free',
+  ),
+  AiEndpointPreset(
+    id: 'qianfan-ernie-speed',
+    labelZh: '百度千帆 · ERNIE-Speed',
+    labelEn: 'Baidu ERNIE-Speed',
+    endpoint: 'https://qianfan.baidubce.com/v2',
+    model: 'ernie-speed-128k',
+    badgeZh: '免费',
+    badgeEn: 'Free',
+  ),
+];
+
+const List<AiEndpointPreset> kAiCloudGeneralPresets = [
+  AiEndpointPreset(
+    id: 'deepseek-chat',
+    labelZh: 'DeepSeek Chat',
+    labelEn: 'DeepSeek Chat',
+    endpoint: 'https://api.deepseek.com/v1',
+    model: 'deepseek-chat',
+  ),
+  AiEndpointPreset(
+    id: 'deepseek-reasoner',
+    labelZh: 'DeepSeek R1',
+    labelEn: 'DeepSeek R1',
+    endpoint: 'https://api.deepseek.com/v1',
+    model: 'deepseek-reasoner',
+  ),
+  AiEndpointPreset(
+    id: 'openai-gpt4o-mini',
+    labelZh: 'OpenAI',
+    labelEn: 'OpenAI',
+    endpoint: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini',
+  ),
+];
+
+const List<AiEndpointPreset> kAiLocalRuntimePresets = [
+  AiEndpointPreset(
+    id: 'local-ollama',
+    labelZh: 'Ollama',
+    labelEn: 'Ollama',
+    endpoint: 'http://localhost:11434/v1',
+    model: 'qwen3:8b',
+  ),
+  AiEndpointPreset(
+    id: 'local-lmstudio',
+    labelZh: 'LM Studio',
+    labelEn: 'LM Studio',
+    endpoint: 'http://localhost:1234/v1',
+    model: 'local-model',
+  ),
+  AiEndpointPreset(
+    id: 'local-llamacpp',
+    labelZh: 'llama.cpp',
+    labelEn: 'llama.cpp',
+    endpoint: 'http://localhost:8080/v1',
+    model: 'local-model',
+  ),
+  AiEndpointPreset(
+    id: 'local-vllm',
+    labelZh: 'vLLM',
+    labelEn: 'vLLM',
+    endpoint: 'http://localhost:8000/v1',
+    model: 'Qwen/Qwen3-8B',
+  ),
+];
 
 class AiChatResponse {
   const AiChatResponse({
@@ -347,11 +479,53 @@ class AiGateway {
     }
   }
 
-  static String _normalizeChatUrl(String endpoint) {
+  static String normalizeChatUrl(String endpoint) {
     final trimmed = endpoint.trim().replaceAll(RegExp(r'/+$'), '');
-    if (trimmed.endsWith('/chat/completions')) return trimmed;
-    if (trimmed.endsWith('/v1')) return '$trimmed/chat/completions';
+    if (trimmed.isEmpty) return 'http://localhost:11434/v1/chat/completions';
+    if (trimmed.endsWith('/chat/completions') || trimmed.endsWith('/api/chat')) {
+      return trimmed;
+    }
+    if (RegExp(r'/v\d+(?:alpha|beta)?$', caseSensitive: false).hasMatch(trimmed)) {
+      return '$trimmed/chat/completions';
+    }
     return '$trimmed/v1/chat/completions';
+  }
+
+  static String extractLocalModelName(String localPath) {
+    final trimmed = localPath.trim();
+    if (trimmed.isEmpty) return '';
+    final parts = trimmed.split(RegExp(r'[/\\]+')).where((e) => e.isNotEmpty).toList();
+    return parts.isEmpty ? '' : parts.last;
+  }
+
+  static Map<String, dynamic> buildThinkingRequestFields(
+    String url,
+    bool deepThinking,
+    String effort,
+  ) {
+    final lower = url.toLowerCase();
+    if (lower.endsWith('/api/chat')) {
+      return {'think': deepThinking ? effort : false};
+    }
+    if (lower.contains('siliconflow.cn') ||
+        lower.contains('modelscope.cn') ||
+        lower.contains('dashscope.aliyuncs.com')) {
+      return deepThinking
+          ? {'enable_thinking': true, 'reasoning_effort': effort}
+          : {'enable_thinking': false};
+    }
+    if (lower.contains('bigmodel.cn')) {
+      return {
+        'thinking': {'type': deepThinking ? 'enabled' : 'disabled'},
+      };
+    }
+    return {'reasoning_effort': deepThinking ? effort : 'none'};
+  }
+
+  static String stripThinkingTags(String text) {
+    final cleaned =
+        text.replaceAll(RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false), '').trim();
+    return cleaned.isNotEmpty ? cleaned : text.trim();
   }
 
   static Future<AiChatResponse> callChat({
@@ -371,7 +545,9 @@ class AiGateway {
         : '$systemPrompt\n\nActive Skills:\n${activeSkills.map((s) => '- ${s.name}: ${s.instructions}').join('\n')}';
 
     if (settings.aiProvider == 'offline-smart' ||
-        (settings.aiProvider == 'openai-compatible' && settings.aiApiKey.trim().isEmpty && allowNetworkFallback)) {
+        (settings.aiProvider == 'openai-compatible' &&
+            settings.aiApiKey.trim().isEmpty &&
+            allowNetworkFallback)) {
       return AiChatResponse(
         text: fallback(),
         source: 'offline-smart',
@@ -380,25 +556,48 @@ class AiGateway {
     }
 
     try {
-      final url = Uri.parse(_normalizeChatUrl(settings.aiEndpoint));
+      final normalizedUrl = normalizeChatUrl(settings.aiEndpoint);
+      final url = Uri.parse(normalizedUrl);
       final headers = <String, String>{'Content-Type': 'application/json'};
       if (settings.aiProvider == 'openai-compatible' && settings.aiApiKey.trim().isNotEmpty) {
         headers['Authorization'] = 'Bearer ${settings.aiApiKey.trim()}';
       }
-      final resp = await http
-          .post(
-            url,
-            headers: headers,
-            body: jsonEncode({
-              'model': settings.aiModel.isEmpty ? 'qwen2.5:14b' : settings.aiModel,
-              'messages': [
-                {'role': 'system', 'content': skillPrompt},
-                {'role': 'user', 'content': userPrompt},
-              ],
-              'temperature': 0.3,
-            }),
-          )
-          .timeout(const Duration(seconds: 25));
+
+      final deepThinking = settings.aiDeepThinking;
+      final effort = settings.aiThinkingEffort;
+      final modelName = settings.aiModel.trim().isNotEmpty
+          ? settings.aiModel.trim()
+          : (settings.aiProvider == 'ollama'
+              ? (extractLocalModelName(settings.aiLocalModelPath).isNotEmpty
+                  ? extractLocalModelName(settings.aiLocalModelPath)
+                  : 'qwen3:8b')
+              : 'deepseek-chat');
+
+      final basePayload = <String, dynamic>{
+        'model': modelName,
+        'messages': [
+          {'role': 'system', 'content': skillPrompt},
+          {'role': 'user', 'content': userPrompt},
+        ],
+        'temperature': 0.3,
+      };
+      if (normalizedUrl.toLowerCase().endsWith('/api/chat')) {
+        basePayload['stream'] = false;
+      }
+
+      final thinkingFields = buildThinkingRequestFields(normalizedUrl, deepThinking, effort);
+      final primaryPayload = <String, dynamic>{...basePayload, ...thinkingFields};
+      final timeout = deepThinking ? const Duration(seconds: 90) : const Duration(seconds: 35);
+
+      var resp = await http
+          .post(url, headers: headers, body: jsonEncode(primaryPayload))
+          .timeout(timeout);
+
+      if ((resp.statusCode == 400 || resp.statusCode == 422) && thinkingFields.isNotEmpty) {
+        resp = await http
+            .post(url, headers: headers, body: jsonEncode(basePayload))
+            .timeout(timeout);
+      }
 
       if (resp.statusCode < 200 || resp.statusCode >= 300) {
         throw Exception('HTTP ${resp.statusCode}');
@@ -409,10 +608,9 @@ class AiGateway {
           ? ((choices.first as Map<String, dynamic>)['message'] as Map<String, dynamic>?)
           : null;
       final fallbackMsg = data['message'] as Map<String, dynamic>?;
-      final content = (firstChoiceMsg?['content'] ?? fallbackMsg?['content'])
-          ?.toString()
-          .trim();
-      if (content == null || content.isEmpty) {
+      final rawContent = (firstChoiceMsg?['content'] ?? fallbackMsg?['content'])?.toString() ?? '';
+      final content = stripThinkingTags(rawContent);
+      if (content.isEmpty) {
         throw Exception('Empty AI response');
       }
       return AiChatResponse(
@@ -484,6 +682,8 @@ class AiGateway {
     if (settings.aiProvider == 'offline-smart') {
       return (ok: true, message: '离线智能规则引擎就绪（零网络泄露风险）');
     }
+    final thinkingLabel =
+        settings.aiDeepThinking ? '深度思考：开 (${settings.aiThinkingEffort})' : '深度思考：关';
     try {
       final res = await callChat(
         settings: settings,
@@ -493,9 +693,14 @@ class AiGateway {
         fallback: () => 'FAILED',
         allowNetworkFallback: false,
       );
-      return (ok: true, message: '连接成功（${res.source}）：${res.text}');
+      final srcLabel = res.source == 'ollama' ? '本地模型' : '云端 API';
+      return (ok: true, message: '连接成功（$srcLabel · $thinkingLabel）：${res.text}');
     } catch (e) {
-      return (ok: false, message: '连接失败：$e');
+      final localPath = settings.aiLocalModelPath.trim();
+      final hint = settings.aiProvider == 'ollama' && localPath.isNotEmpty
+          ? '（已设路径：$localPath，请确认本地模型服务已启动）'
+          : '';
+      return (ok: false, message: '连接失败：$e$hint');
     }
   }
 }

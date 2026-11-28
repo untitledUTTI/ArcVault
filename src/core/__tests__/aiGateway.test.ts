@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   AiPrivacyBlockedError,
+  buildThinkingRequestFields,
   callAiChat,
   guardAiPrivacy,
+  normalizeChatCompletionsUrl,
   resolveEffectiveAiPolicy,
   generateSnapshotSummary,
   generateAnnotationRewrite,
+  stripThinkingTags,
 } from '../aiGateway';
 import { generateRebuttalWithAi } from '../rebuttalGenerator';
 import { BUILTIN_SKILLS } from '../skillRegistry';
@@ -239,5 +242,115 @@ describe('AI Gateway & Privacy Policy Enforcement', () => {
     });
     expect(offlineDisabled.phrasebankPriorityApplied).toBe(false);
     expect(offlineDisabled.text).toBe('A lot of studies delve into this.');
+  });
+
+  it('normalizes versioned OpenAI-compatible endpoints (/v1, /v2, /v4) and /api/chat', () => {
+    expect(normalizeChatCompletionsUrl('https://api.siliconflow.cn/v1')).toBe(
+      'https://api.siliconflow.cn/v1/chat/completions',
+    );
+    expect(normalizeChatCompletionsUrl('https://qianfan.baidubce.com/v2/')).toBe(
+      'https://qianfan.baidubce.com/v2/chat/completions',
+    );
+    expect(normalizeChatCompletionsUrl('https://open.bigmodel.cn/api/paas/v4')).toBe(
+      'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    );
+    expect(normalizeChatCompletionsUrl('http://localhost:11434')).toBe(
+      'http://localhost:11434/v1/chat/completions',
+    );
+    expect(normalizeChatCompletionsUrl('http://localhost:11434/api/chat')).toBe(
+      'http://localhost:11434/api/chat',
+    );
+  });
+
+  it('attaches provider-aware deep thinking fields (default on, medium) and strips <think> tags', async () => {
+    expect(buildThinkingRequestFields('https://api.openai.com/v1/chat/completions', true, 'medium')).toEqual({
+      reasoning_effort: 'medium',
+    });
+    expect(buildThinkingRequestFields('https://api.siliconflow.cn/v1/chat/completions', true, 'high')).toEqual({
+      enable_thinking: true,
+      reasoning_effort: 'high',
+    });
+    expect(buildThinkingRequestFields('https://api.siliconflow.cn/v1/chat/completions', false, 'high')).toEqual({
+      enable_thinking: false,
+    });
+    expect(buildThinkingRequestFields('https://open.bigmodel.cn/api/paas/v4/chat/completions', true, 'low')).toEqual({
+      thinking: { type: 'enabled' },
+    });
+    expect(buildThinkingRequestFields('http://localhost:11434/api/chat', true, 'high')).toEqual({
+      think: 'high',
+    });
+    expect(buildThinkingRequestFields('http://localhost:11434/api/chat', false, 'medium')).toEqual({
+      think: false,
+    });
+    expect(stripThinkingTags('<think>internal chain of thought</think>\nFinal answer')).toBe('Final answer');
+
+    const capturedPayloads: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      capturedPayloads.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: '<think>reasoning...</think>OK' } }],
+        }),
+      } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const localSettings: AppSettings = {
+      ...makeSettings('ollama'),
+      aiEndpoint: 'http://localhost:11434/v1',
+      aiModel: '',
+      aiLocalModelPath: 'D:\\Models\\Qwen3-8B-Q4_K_M.gguf',
+    };
+
+    const res = await callAiChat({
+      settings: localSettings,
+      policy: 'local-only',
+      systemPrompt: 'Sys',
+      userPrompt: 'Hi',
+      fallback: () => 'fallback',
+    });
+
+    expect(res.source).toBe('ollama');
+    expect(res.text).toBe('OK');
+    expect(capturedPayloads[0].model).toBe('Qwen3-8B-Q4_K_M.gguf');
+    expect(capturedPayloads[0].reasoning_effort).toBe('medium');
+  });
+
+  it('retries without thinking fields when a provider rejects them with HTTP 400/422', async () => {
+    const capturedPayloads: Array<Record<string, unknown>> = [];
+    let callCount = 0;
+    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      callCount += 1;
+      capturedPayloads.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+      if (callCount === 1) {
+        return {
+          ok: false,
+          status: 400,
+          json: async () => ({ error: 'unsupported parameter' }),
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Recovered output' } }],
+        }),
+      } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await callAiChat({
+      settings: makeSettings('openai-compatible'),
+      policy: 'cloud-or-local',
+      systemPrompt: 'Sys',
+      userPrompt: 'Hi',
+      fallback: () => 'fallback',
+      allowNetworkFallback: false,
+    });
+
+    expect(callCount).toBe(2);
+    expect(capturedPayloads[0].reasoning_effort).toBe('medium');
+    expect(capturedPayloads[1].reasoning_effort).toBeUndefined();
+    expect(res.text).toBe('Recovered output');
   });
 });

@@ -204,3 +204,51 @@ pub async fn pick_vault_directory(app: AppHandle) -> Result<Option<String>, Stri
         Ok(None)
     }
 }
+
+#[tauri::command]
+pub async fn pick_local_model_file(app: AppHandle) -> Result<Option<String>, String> {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        use tauri_plugin_dialog::DialogExt;
+        let picked = tauri::async_runtime::spawn_blocking(move || {
+            app.dialog()
+                .file()
+                .set_title("选择本地模型文件")
+                .add_filter(
+                    "Model Files",
+                    &["gguf", "onnx", "safetensors", "bin", "pt", "pth", "mlmodel", "tflite"],
+                )
+                .blocking_pick_file()
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+        Ok(picked.map(|p| p.to_string()))
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        let _ = app;
+        Ok(None)
+    }
+}
+
+#[tauri::command]
+pub async fn pick_local_model_directory(app: AppHandle) -> Result<Option<String>, String> {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        use tauri_plugin_dialog::DialogExt;
+        let picked = tauri::async_runtime::spawn_blocking(move || {
+            app.dialog()
+                .file()
+                .set_title("选择本地模型目录")
+                .blocking_pick_folder()
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+        Ok(picked.map(|p| p.to_string()))
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        let _ = app;
+        Ok(None)
+    }
+}

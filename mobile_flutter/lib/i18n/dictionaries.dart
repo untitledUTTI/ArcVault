@@ -133,7 +133,7 @@ class ArcStrings {
       : 'No Word comments or track-changes yet. Import a `.docx` with reviewer comments to see them here.';
   String get aiPolicyLabel => isZh ? 'AI 隐私锁：' : 'AI Privacy: ';
   String get aiCloudLocal => isZh ? '云端/本地可用' : 'Cloud / Local';
-  String get aiLocalOnly => isZh ? '仅本地 Ollama' : 'Local Ollama Only';
+  String get aiLocalOnly => isZh ? '仅本地模型' : 'Local Model Only';
   String get aiDisabled => isZh ? '已禁止 AI' : 'AI Disabled';
   String get settingsTitle => isZh ? 'ArcVault · 穹档设置中心' : 'ArcVault Settings';
   String get done => isZh ? '完成' : 'Done';

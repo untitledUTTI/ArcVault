@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../core/device_layout.dart';
 import '../core/tutorial_flow.dart';
@@ -51,7 +55,7 @@ class WorkspaceShell extends StatefulWidget {
   State<WorkspaceShell> createState() => _WorkspaceShellState();
 }
 
-class _WorkspaceShellState extends State<WorkspaceShell> with SingleTickerProviderStateMixin {
+class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStateMixin {
   final GlobalKey _tourRootKey = GlobalKey();
   final ScrollController _quickFormatScroll = ScrollController();
 
@@ -64,6 +68,12 @@ class _WorkspaceShellState extends State<WorkspaceShell> with SingleTickerProvid
     parent: _drawerAnim,
     curve: Curves.easeOutCubic,
     reverseCurve: Curves.easeInCubic,
+  );
+  bool _backGuardActive = false;
+  Timer? _backGuardTimer;
+  late final AnimationController _backGuardAnim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2200),
   );
   bool _annotationSheetOpen = false;
   bool _timelineCollapsed = false;
@@ -87,8 +97,29 @@ class _WorkspaceShellState extends State<WorkspaceShell> with SingleTickerProvid
     }
   }
 
+  void _triggerBackGuard(AppController c) {
+    c.triggerHaptic(HapticPattern.selection);
+    _backGuardTimer?.cancel();
+    setState(() => _backGuardActive = true);
+    _backGuardAnim.forward(from: 0.0);
+    _backGuardTimer = Timer(const Duration(milliseconds: 2200), () {
+      if (!mounted) return;
+      setState(() => _backGuardActive = false);
+    });
+  }
+
+  void _dismissBackGuard() {
+    _backGuardTimer?.cancel();
+    _backGuardTimer = null;
+    if (_backGuardActive) {
+      setState(() => _backGuardActive = false);
+    }
+  }
+
   @override
   void dispose() {
+    _backGuardTimer?.cancel();
+    _backGuardAnim.dispose();
     _drawerAnim.dispose();
     _quickFormatScroll.dispose();
     super.dispose();
@@ -332,12 +363,35 @@ class _WorkspaceShellState extends State<WorkspaceShell> with SingleTickerProvid
     }
 
     return PopScope(
-      canPop: c.tutorialMode == null,
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && c.tutorialMode == TutorialMode.replay) {
+        if (didPop) return;
+        if (c.tutorialMode == TutorialMode.firstRun) {
+          return;
+        }
+        if (c.tutorialMode == TutorialMode.replay) {
           _cleanupTutorialScenes();
           c.closeTutorialReplay();
+          return;
         }
+        if (_inlineModal != null) {
+          setState(() => _inlineModal = null);
+          return;
+        }
+        if (_drawerOpen) {
+          _setDrawerOpen(false);
+          return;
+        }
+        if (_annotationSheetOpen) {
+          setState(() => _annotationSheetOpen = false);
+          return;
+        }
+        if (_backGuardActive) {
+          _dismissBackGuard();
+          SystemNavigator.pop();
+          return;
+        }
+        _triggerBackGuard(c);
       },
       child: AnnotatedRegion(
         value: t.systemUiOverlayStyle,
@@ -562,6 +616,116 @@ class _WorkspaceShellState extends State<WorkspaceShell> with SingleTickerProvid
                     ),
                   ),
                 ),
+
+              // Theme-Integrated Mobile Back-Exit Protection Capsule
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: layout.bottomPadding + (layout.isCompact ? 68 : 24),
+                child: IgnorePointer(
+                  ignoring: !_backGuardActive,
+                  child: Center(
+                    child: AnimatedSlide(
+                      offset: _backGuardActive ? Offset.zero : const Offset(0, 0.35),
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      child: AnimatedOpacity(
+                        opacity: _backGuardActive ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 180),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 340),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(t.surfaceRadius.clamp(14.0, 22.0)),
+                              onTap: _dismissBackGuard,
+                              child: ClipRRect(
+                                borderRadius:
+                                    BorderRadius.circular(t.surfaceRadius.clamp(14.0, 22.0)),
+                                child: ArcSurface(
+                                  borderRadius: t.surfaceRadius.clamp(14.0, 22.0),
+                                  padding: EdgeInsets.zero,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(12, 10, 8, 9),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 28,
+                                              height: 28,
+                                              decoration: BoxDecoration(
+                                                color: t.accentSoft,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Icon(
+                                                LucideIcons.shieldAlert,
+                                                size: 15,
+                                                color: t.accent,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                s.locale.isZh
+                                                    ? '再按一次返回键退出穹档'
+                                                    : 'Press Back again to exit ArcVault',
+                                                style: TextStyle(
+                                                  fontSize: 12.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: t.textPrimary,
+                                                ),
+                                              ),
+                                            ),
+                                            IconButton(
+                                              onPressed: _dismissBackGuard,
+                                              icon: Icon(
+                                                LucideIcons.x,
+                                                size: 14,
+                                                color: t.textMuted,
+                                              ),
+                                              visualDensity: VisualDensity.compact,
+                                              tooltip: s.locale.isZh ? '取消' : 'Dismiss',
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      AnimatedBuilder(
+                                        animation: _backGuardAnim,
+                                        builder: (context, _) {
+                                          final remain =
+                                              (1.0 - _backGuardAnim.value).clamp(0.0, 1.0);
+                                          return SizedBox(
+                                            height: 3,
+                                            width: double.infinity,
+                                            child: Stack(
+                                              children: [
+                                                Positioned.fill(
+                                                  child: ColoredBox(color: t.accentSoft),
+                                                ),
+                                                FractionallySizedBox(
+                                                  widthFactor: remain,
+                                                  alignment: Alignment.centerLeft,
+                                                  child: ColoredBox(color: t.accent),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
 
               // First-run / Replay Live In-App Spotlight Tutorial Overlay (TOP-MOST)
               if (c.tutorialMode != null)

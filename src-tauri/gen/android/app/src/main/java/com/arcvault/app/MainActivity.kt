@@ -5,18 +5,52 @@ import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 
 class MainActivity : TauriActivity() {
+  private var activeWebView: WebView? = null
+
+  private val backCallback = object : OnBackPressedCallback(true) {
+    override fun handleOnBackPressed() {
+      val webView = activeWebView
+      if (webView == null) {
+        finish()
+        return
+      }
+      webView.evaluateJavascript(
+        "(function(){try{return typeof window.__ARC_HANDLE_BACK__==='function'?String(window.__ARC_HANDLE_BACK__()):'unhandled';}catch(e){return 'unhandled';}})()",
+      ) { raw ->
+        val result = raw?.trim()?.trim('"') ?: "unhandled"
+        if (result == "exit" || result == "unhandled") {
+          finish()
+        }
+      }
+    }
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
+    onBackPressedDispatcher.addCallback(this, backCallback)
   }
 
   override fun onWebViewCreate(webView: WebView) {
     super.onWebViewCreate(webView)
+    activeWebView = webView
     webView.isHapticFeedbackEnabled = true
     webView.addJavascriptInterface(ArcNativeHaptics(webView), "__ARC_ANDROID_HAPTICS__")
+    webView.addJavascriptInterface(ArcAndroidBackBridge(this), "__ARC_ANDROID_BACK__")
+  }
+}
+
+private class ArcAndroidBackBridge(private val activity: MainActivity) {
+  @JavascriptInterface
+  fun exitApp(): Boolean {
+    activity.runOnUiThread {
+      activity.finish()
+    }
+    return true
   }
 }
 

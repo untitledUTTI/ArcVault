@@ -40,12 +40,52 @@ class _SettingsModalState extends State<SettingsModal> {
   bool _testingAi = false;
   String? _aiTestResult;
 
+  late final TextEditingController _aiEndpointCtrl;
+  late final TextEditingController _aiModelCtrl;
+  late final TextEditingController _aiApiKeyCtrl;
+  late final TextEditingController _aiLocalPathCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = widget.controller.settings;
+    _aiEndpointCtrl = TextEditingController(text: s.aiEndpoint);
+    _aiModelCtrl = TextEditingController(text: s.aiModel);
+    _aiApiKeyCtrl = TextEditingController(text: s.aiApiKey);
+    _aiLocalPathCtrl = TextEditingController(text: s.aiLocalModelPath);
+  }
+
+  @override
+  void dispose() {
+    _aiEndpointCtrl.dispose();
+    _aiModelCtrl.dispose();
+    _aiApiKeyCtrl.dispose();
+    _aiLocalPathCtrl.dispose();
+    super.dispose();
+  }
+
+  void _syncAiControllers(AppSettingsModel s) {
+    if (_aiEndpointCtrl.text != s.aiEndpoint) {
+      _aiEndpointCtrl.text = s.aiEndpoint;
+    }
+    if (_aiModelCtrl.text != s.aiModel) {
+      _aiModelCtrl.text = s.aiModel;
+    }
+    if (_aiApiKeyCtrl.text != s.aiApiKey) {
+      _aiApiKeyCtrl.text = s.aiApiKey;
+    }
+    if (_aiLocalPathCtrl.text != s.aiLocalModelPath) {
+      _aiLocalPathCtrl.text = s.aiLocalModelPath;
+    }
+  }
+
   @override
   void didUpdateWidget(covariant SettingsModal oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialTab != widget.initialTab) {
       _tab = widget.initialTab;
     }
+    _syncAiControllers(widget.controller.settings);
   }
 
   @override
@@ -622,6 +662,9 @@ class _SettingsModalState extends State<SettingsModal> {
   }
 
   List<Widget> _buildAiTab(AppController c, AppSettingsModel s, ArcThemeTokens t, bool isZh) {
+    final isLocalMode = s.aiProvider == 'ollama';
+    final isCloudMode = s.aiProvider == 'openai-compatible';
+    final effort = s.aiThinkingEffort;
     return [
       ArcCardSurface(
         padding: const EdgeInsets.all(14),
@@ -633,58 +676,276 @@ class _SettingsModalState extends State<SettingsModal> {
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
+              runSpacing: 6,
               children: [
                 ChoiceChip(
-                  label: Text(isZh ? '离线智能规则' : 'Offline Smart'),
+                  label: Text(isZh ? '离线智能启发式（免 Key）' : 'Offline Heuristic'),
                   selected: s.aiProvider == 'offline-smart',
                   onSelected: (_) => c.updateSettings(s.copyWith(aiProvider: 'offline-smart')),
                 ),
                 ChoiceChip(
-                  label: const Text('Ollama (Local)'),
-                  selected: s.aiProvider == 'ollama',
-                  onSelected: (_) => c.updateSettings(s.copyWith(aiProvider: 'ollama')),
+                  label: Text(isZh ? '云端 OpenAI 兼容 API' : 'Cloud OpenAI-Compatible'),
+                  selected: isCloudMode,
+                  onSelected: (_) {
+                    final ep = s.aiEndpoint;
+                    final isLocalEp = ep.contains('11434') ||
+                        ep.contains('1234') ||
+                        ep.contains('8080') ||
+                        ep.contains('8000') ||
+                        ep.contains('localhost') ||
+                        ep.contains('127.0.0.1');
+                    final next = s.copyWith(
+                      aiProvider: 'openai-compatible',
+                      aiEndpoint: isLocalEp ? 'https://api.siliconflow.cn/v1' : ep,
+                      aiModel: (s.aiModel.contains(':') || s.aiModel == 'local-model')
+                          ? 'Qwen/Qwen2.5-7B-Instruct'
+                          : s.aiModel,
+                    );
+                    c.updateSettings(next);
+                    _syncAiControllers(next);
+                  },
                 ),
                 ChoiceChip(
-                  label: const Text('OpenAI Compatible'),
-                  selected: s.aiProvider == 'openai-compatible',
-                  onSelected: (_) => c.updateSettings(s.copyWith(aiProvider: 'openai-compatible')),
+                  label: Text(isZh ? '本地模型（不出本机）' : 'Local Model (On-Device)'),
+                  selected: isLocalMode,
+                  onSelected: (_) {
+                    final isCloudEp = s.aiEndpoint.trim().startsWith('https://');
+                    final next = s.copyWith(
+                      aiProvider: 'ollama',
+                      aiEndpoint:
+                          (isCloudEp || s.aiEndpoint.trim().isEmpty) ? 'http://localhost:11434/v1' : s.aiEndpoint,
+                      aiModel: (s.aiModel.trim().isEmpty ||
+                              s.aiModel.contains('deepseek-chat') ||
+                              s.aiModel.contains('gpt-') ||
+                              s.aiModel.contains('glm-') ||
+                              s.aiModel.contains('ernie-') ||
+                              s.aiModel.contains('hunyuan-'))
+                          ? 'qwen3:8b'
+                          : s.aiModel,
+                    );
+                    c.updateSettings(next);
+                    _syncAiControllers(next);
+                  },
                 ),
               ],
             ),
+            if (isCloudMode) ...[
+              const SizedBox(height: 12),
+              Text(
+                isZh ? '国内可访问免费模型（点击一键填入）：' : 'China-Accessible Free Models:',
+                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF16A34A)),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final p in kAiCloudFreePresets)
+                    ChoiceChip(
+                      label: Text(
+                        '${isZh ? p.labelZh : p.labelEn}${p.badgeZh != null ? ' · ${isZh ? p.badgeZh : p.badgeEn}' : ''}',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      selected: s.aiEndpoint == p.endpoint && s.aiModel == p.model,
+                      onSelected: (_) {
+                        final next = s.copyWith(aiEndpoint: p.endpoint, aiModel: p.model);
+                        c.updateSettings(next);
+                        _syncAiControllers(next);
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isZh ? '其他常用预设：' : 'Other Presets:',
+                style: TextStyle(fontSize: 11.5, color: t.textMuted),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final p in kAiCloudGeneralPresets)
+                    ChoiceChip(
+                      label: Text(isZh ? p.labelZh : p.labelEn, style: const TextStyle(fontSize: 11)),
+                      selected: s.aiEndpoint == p.endpoint && s.aiModel == p.model,
+                      onSelected: (_) {
+                        final next = s.copyWith(aiEndpoint: p.endpoint, aiModel: p.model);
+                        c.updateSettings(next);
+                        _syncAiControllers(next);
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                isZh
+                    ? '提示：上述国内平台均可直连，注册后生成免费 API Key/Token 填入下方即可。'
+                    : 'Tip: Domestic providers above are directly accessible in China with a free API key.',
+                style: TextStyle(fontSize: 11, color: t.textMuted),
+              ),
+            ],
+            if (isLocalMode) ...[
+              const SizedBox(height: 12),
+              Text(
+                isZh ? '本地模型运行后端预设：' : 'Local Runtime Presets:',
+                style: TextStyle(fontSize: 11.5, color: t.textMuted),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final p in kAiLocalRuntimePresets)
+                    ChoiceChip(
+                      label: Text(isZh ? p.labelZh : p.labelEn, style: const TextStyle(fontSize: 11)),
+                      selected: s.aiEndpoint == p.endpoint,
+                      onSelected: (_) {
+                        final next = s.copyWith(aiEndpoint: p.endpoint, aiModel: p.model);
+                        c.updateSettings(next);
+                        _syncAiControllers(next);
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _aiLocalPathCtrl,
+                onChanged: (v) => c.updateSettings(s.copyWith(aiLocalModelPath: v)),
+                decoration: InputDecoration(
+                  isDense: true,
+                  labelText: isZh ? '自定义本地模型路径（文件或目录）' : 'Custom Local Model Path',
+                  hintText: isZh ? '/storage/.../Qwen3-8B.gguf 或模型目录' : '/path/to/model.gguf or folder',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await c.pickLocalModelFile();
+                      if (mounted) _syncAiControllers(c.settings);
+                    },
+                    icon: const Icon(LucideIcons.fileCode, size: 14),
+                    label: Text(isZh ? '选择模型文件' : 'Pick File'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await c.pickLocalModelDirectory();
+                      if (mounted) _syncAiControllers(c.settings);
+                    },
+                    icon: const Icon(LucideIcons.folderOpen, size: 14),
+                    label: Text(isZh ? '选择目录' : 'Pick Folder'),
+                  ),
+                  if (s.aiLocalModelPath.trim().isNotEmpty)
+                    TextButton.icon(
+                      onPressed: () {
+                        final next = s.copyWith(aiLocalModelPath: '');
+                        c.updateSettings(next);
+                        _syncAiControllers(next);
+                      },
+                      icon: const Icon(LucideIcons.x, size: 14),
+                      label: Text(isZh ? '清空' : 'Clear'),
+                    ),
+                ],
+              ),
+            ],
             if (s.aiProvider != 'offline-smart') ...[
               const SizedBox(height: 10),
-              TextFormField(
-                initialValue: s.aiEndpoint,
+              TextField(
+                controller: _aiEndpointCtrl,
                 onChanged: (v) => c.updateSettings(s.copyWith(aiEndpoint: v)),
                 decoration: InputDecoration(
                   isDense: true,
-                  labelText: 'Endpoint URL',
+                  labelText: isZh ? '接口地址（Endpoint URL）' : 'Endpoint URL',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 ),
               ),
               const SizedBox(height: 8),
-              TextFormField(
-                initialValue: s.aiModel,
+              TextField(
+                controller: _aiModelCtrl,
                 onChanged: (v) => c.updateSettings(s.copyWith(aiModel: v)),
                 decoration: InputDecoration(
                   isDense: true,
-                  labelText: 'Model Name',
+                  labelText: isZh ? '模型名称（Model Name）' : 'Model Name',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 ),
               ),
-              if (s.aiProvider == 'openai-compatible') ...[
+              if (isCloudMode) ...[
                 const SizedBox(height: 8),
-                TextFormField(
-                  initialValue: s.aiApiKey,
+                TextField(
+                  controller: _aiApiKeyCtrl,
                   obscureText: true,
                   onChanged: (v) => c.updateSettings(s.copyWith(aiApiKey: v)),
                   decoration: InputDecoration(
                     isDense: true,
-                    labelText: 'API Key',
+                    labelText: isZh ? 'API Key（仅存本机）' : 'API Key (Local Only)',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
               ],
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: t.bgApp,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: t.borderSubtle),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SwitchListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        isZh ? '深度思考（Deep Thinking）' : 'Deep Thinking',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: t.textPrimary),
+                      ),
+                      subtitle: Text(
+                        isZh ? '默认开启；云端与本地推理模型均适用' : 'Default On; applies to both Cloud & Local models',
+                        style: TextStyle(fontSize: 11, color: t.textMuted),
+                      ),
+                      value: s.aiDeepThinking,
+                      onChanged: (v) => c.updateSettings(s.copyWith(aiDeepThinking: v)),
+                    ),
+                    const SizedBox(height: 4),
+                    Opacity(
+                      opacity: s.aiDeepThinking ? 1.0 : 0.5,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isZh ? '模型思考程度（Thinking Effort）' : 'Thinking Effort',
+                            style: TextStyle(fontSize: 11.5, color: t.textSecondary),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              for (final opt in const [
+                                (id: 'low', zh: '低 (low)', en: 'Low'),
+                                (id: 'medium', zh: '中 (medium)', en: 'Medium'),
+                                (id: 'high', zh: '高 (high)', en: 'High'),
+                              ])
+                                ChoiceChip(
+                                  label: Text(isZh ? opt.zh : opt.en, style: const TextStyle(fontSize: 11.5)),
+                                  selected: effort == opt.id,
+                                  onSelected: s.aiDeepThinking
+                                      ? (_) => c.updateSettings(s.copyWith(aiThinkingEffort: opt.id))
+                                      : null,
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
             const SizedBox(height: 10),
             Row(

@@ -1754,6 +1754,9 @@ class AppSettingsModel {
     this.aiEndpoint = 'http://localhost:11434/v1',
     this.aiModel = 'qwen2.5:14b',
     this.aiApiKey = '',
+    this.aiLocalModelPath = '',
+    this.aiDeepThinking = true,
+    this.aiThinkingEffort = 'medium',
     this.skills = const [],
     this.phrasebank = const PhrasebankSettingsModel(),
     this.typography = const TypographySettingsModel(),
@@ -1779,6 +1782,9 @@ class AppSettingsModel {
   final String aiEndpoint;
   final String aiModel;
   final String aiApiKey;
+  final String aiLocalModelPath;
+  final bool aiDeepThinking;
+  final String aiThinkingEffort; // 'low' | 'medium' | 'high'
   final List<AiSkillModel> skills;
   final PhrasebankSettingsModel phrasebank;
   final TypographySettingsModel typography;
@@ -1804,6 +1810,9 @@ class AppSettingsModel {
     String? aiEndpoint,
     String? aiModel,
     String? aiApiKey,
+    String? aiLocalModelPath,
+    bool? aiDeepThinking,
+    String? aiThinkingEffort,
     List<AiSkillModel>? skills,
     PhrasebankSettingsModel? phrasebank,
     TypographySettingsModel? typography,
@@ -1829,6 +1838,9 @@ class AppSettingsModel {
       aiEndpoint: aiEndpoint ?? this.aiEndpoint,
       aiModel: aiModel ?? this.aiModel,
       aiApiKey: aiApiKey ?? this.aiApiKey,
+      aiLocalModelPath: aiLocalModelPath ?? this.aiLocalModelPath,
+      aiDeepThinking: aiDeepThinking ?? this.aiDeepThinking,
+      aiThinkingEffort: aiThinkingEffort ?? this.aiThinkingEffort,
       skills: skills ?? this.skills,
       phrasebank: phrasebank ?? this.phrasebank,
       typography: typography ?? this.typography,
@@ -1856,6 +1868,9 @@ class AppSettingsModel {
         'aiEndpoint': aiEndpoint,
         'aiModel': aiModel,
         'aiApiKey': aiApiKey,
+        'aiLocalModelPath': aiLocalModelPath,
+        'aiDeepThinking': aiDeepThinking,
+        'aiThinkingEffort': aiThinkingEffort,
         'skills': skills.map((s) => s.toJson()).toList(),
         'phrasebank': phrasebank.toJson(),
         'typography': typography.toJson(),
@@ -1886,6 +1901,9 @@ class AppSettingsModel {
       aiEndpoint: json['aiEndpoint']?.toString() ?? 'http://localhost:11434/v1',
       aiModel: json['aiModel']?.toString() ?? 'qwen2.5:14b',
       aiApiKey: json['aiApiKey']?.toString() ?? '',
+      aiLocalModelPath: json['aiLocalModelPath']?.toString() ?? '',
+      aiDeepThinking: json['aiDeepThinking'] is bool ? json['aiDeepThinking'] as bool : true,
+      aiThinkingEffort: _normalizeThinkingEffort(json['aiThinkingEffort']?.toString()),
       skills: (json['skills'] as List<dynamic>?)
               ?.map((e) => AiSkillModel.fromJson(Map<String, dynamic>.from(e as Map)))
               .toList() ??
@@ -1920,6 +1938,17 @@ class AppSettingsModel {
       customVaultDir: json['customVaultDir']?.toString() ?? '',
       customBackupDir: json['customBackupDir']?.toString() ?? '',
     );
+  }
+
+  static String _normalizeThinkingEffort(String? raw) {
+    switch (raw) {
+      case 'low':
+      case 'medium':
+      case 'high':
+        return raw!;
+      default:
+        return 'medium';
+    }
   }
 }
 

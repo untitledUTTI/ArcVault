@@ -174,6 +174,8 @@ pub fn run() {
             commands::open_vault_folder,
             commands::set_custom_vault_dir,
             commands::pick_vault_directory,
+            commands::pick_local_model_file,
+            commands::pick_local_model_directory,
             mobile::trigger_haptic,
             mobile::biometric_check_available,
             mobile::biometric_authenticate,

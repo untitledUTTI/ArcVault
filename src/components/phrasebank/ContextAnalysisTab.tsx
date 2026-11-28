@@ -114,8 +114,8 @@ export const ContextAnalysisTab: React.FC<ContextAnalysisTabProps> = ({
                     : 'Offline Heuristic'
                   : settings.aiProvider === 'ollama'
                     ? isZh
-                      ? '本地 Ollama'
-                      : 'Local Ollama'
+                      ? '本地模型'
+                      : 'Local Model'
                     : isZh
                       ? '云端 + 离线兜底'
                       : 'Cloud + Offline Fallback'}
@@ -167,8 +167,8 @@ export const ContextAnalysisTab: React.FC<ContextAnalysisTabProps> = ({
                     : 'Local Rules'
                   : result.source === 'ollama'
                     ? isZh
-                      ? '本地 Ollama'
-                      : 'Local Ollama'
+                      ? '本地模型'
+                      : 'Local Model'
                     : isZh
                       ? 'AI 深度润色'
                       : 'AI Polish'}

@@ -1,10 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Minimize2, Monitor, PanelLeftOpen, PanelRightOpen, Smartphone, Tablet } from 'lucide-react';
+import {
+  Minimize2,
+  Monitor,
+  PanelLeftOpen,
+  PanelRightOpen,
+  ShieldAlert,
+  Smartphone,
+  Tablet,
+  X,
+} from 'lucide-react';
 import { TopBar } from './components/TopBar';
 import { buildThemedFaviconDataUrl } from './components/ArcVaultLogo';
 import { GlobalTooltipHost } from './components/GlobalTooltipHost';
 import { ResizeSash } from './components/ResizeSash';
 import { TouchScrollScrubber } from './components/TouchScrollScrubber';
+import {
+  installGlobalBackDispatcher,
+  type BackActionResult,
+} from './platform/backProtection';
 import { startResizeDrag } from './platform/resizeDrag';
 import {
   getSimulatedFrameDimensions,
@@ -180,6 +193,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   aiEndpoint: 'http://localhost:11434/v1',
   aiModel: 'qwen2.5:14b',
   aiApiKey: '',
+  aiLocalModelPath: '',
+  aiDeepThinking: true,
+  aiThinkingEffort: 'medium',
   skills: BUILTIN_SKILLS,
   phrasebank: { ...DEFAULT_PHRASEBANK_SETTINGS },
   watchDirectory: 'D:\\Thesis_Drafts',
@@ -203,6 +219,14 @@ function loadSavedSettings(): AppSettings {
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
+      aiLocalModelPath: parsed.aiLocalModelPath ?? '',
+      aiDeepThinking: parsed.aiDeepThinking ?? true,
+      aiThinkingEffort:
+        parsed.aiThinkingEffort === 'low' ||
+        parsed.aiThinkingEffort === 'medium' ||
+        parsed.aiThinkingEffort === 'high'
+          ? parsed.aiThinkingEffort
+          : 'medium',
       autoBackup: { ...DEFAULT_SETTINGS.autoBackup, ...(parsed.autoBackup ?? {}) },
       typography: { ...DEFAULT_TYPOGRAPHY, ...(parsed.typography ?? {}) },
       monet: { ...DEFAULT_MONET, ...(parsed.monet ?? {}) },
@@ -302,6 +326,11 @@ export function App() {
   const [mobileTimelineOpen, setMobileTimelineOpen] = useState(false);
   const [revisionMode, setRevisionMode] = useState(false);
   const [revisionOrbMenuOpen, setRevisionOrbMenuOpen] = useState(false);
+  const revisionExitGuardRef = useRef<(() => boolean) | null>(null);
+  const [backGuardVisible, setBackGuardVisible] = useState(false);
+  const [backGuardCycle, setBackGuardCycle] = useState(0);
+  const backGuardDeadlineRef = useRef(0);
+  const backGuardTimerRef = useRef<number | null>(null);
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [trashModalOpen, setTrashModalOpen] = useState(false);
   const [tutorialMode, setTutorialMode] = useState<TutorialMode | null>(() =>
@@ -1973,6 +2002,172 @@ export function App() {
     [],
   );
 
+  const backDispatcherStateRef = useRef({
+    tutorialMode,
+    coverModalData,
+    diffModalData,
+    settingsOpen,
+    branchModalOpen,
+    contextAssetsOpen,
+    paperStudioOpen,
+    evolutionStudioOpen,
+    vaultLockOpen,
+    cameraScanOpen,
+    shareModalOpen,
+    syncModalOpen,
+    trashModalOpen,
+    mobileDrawerOpen,
+    mobileTimelineOpen,
+    revisionMode,
+    revisionOrbMenuOpen,
+    isFullscreen,
+    finishTutorialCleanup,
+    triggerAppHaptic,
+  });
+  backDispatcherStateRef.current = {
+    tutorialMode,
+    coverModalData,
+    diffModalData,
+    settingsOpen,
+    branchModalOpen,
+    contextAssetsOpen,
+    paperStudioOpen,
+    evolutionStudioOpen,
+    vaultLockOpen,
+    cameraScanOpen,
+    shareModalOpen,
+    syncModalOpen,
+    trashModalOpen,
+    mobileDrawerOpen,
+    mobileTimelineOpen,
+    revisionMode,
+    revisionOrbMenuOpen,
+    isFullscreen,
+    finishTutorialCleanup,
+    triggerAppHaptic,
+  };
+
+  useEffect(() => {
+    const onRootBack = (): BackActionResult => {
+      const st = backDispatcherStateRef.current;
+
+      if (st.tutorialMode === 'first-run') {
+        return 'handled';
+      }
+      if (st.tutorialMode === 'replay') {
+        st.finishTutorialCleanup(true);
+        setTutorialMode(null);
+        return 'handled';
+      }
+
+      if (st.coverModalData) {
+        setCoverModalData(null);
+        return 'handled';
+      }
+      if (st.diffModalData) {
+        setDiffModalData(null);
+        return 'handled';
+      }
+      if (st.settingsOpen) {
+        setSettingsOpen(false);
+        return 'handled';
+      }
+      if (st.branchModalOpen) {
+        setBranchModalOpen(false);
+        return 'handled';
+      }
+      if (st.contextAssetsOpen) {
+        setContextAssetsOpen(false);
+        return 'handled';
+      }
+      if (st.paperStudioOpen) {
+        setPaperStudioOpen(false);
+        return 'handled';
+      }
+      if (st.evolutionStudioOpen) {
+        setEvolutionStudioOpen(false);
+        return 'handled';
+      }
+      if (st.vaultLockOpen) {
+        setVaultLockOpen(false);
+        return 'handled';
+      }
+      if (st.cameraScanOpen) {
+        setCameraScanOpen(false);
+        return 'handled';
+      }
+      if (st.shareModalOpen) {
+        setShareModalOpen(false);
+        return 'handled';
+      }
+      if (st.syncModalOpen) {
+        setSyncModalOpen(false);
+        return 'handled';
+      }
+      if (st.trashModalOpen) {
+        setTrashModalOpen(false);
+        return 'handled';
+      }
+
+      if (st.mobileDrawerOpen) {
+        setMobileDrawerOpen(false);
+        return 'handled';
+      }
+      if (st.mobileTimelineOpen) {
+        setMobileTimelineOpen(false);
+        return 'handled';
+      }
+      if (st.revisionOrbMenuOpen) {
+        setRevisionOrbMenuOpen(false);
+        return 'handled';
+      }
+      if (st.revisionMode) {
+        setRevisionMode(false);
+        return 'handled';
+      }
+      if (st.isFullscreen) {
+        setIsFullscreen(false);
+        return 'handled';
+      }
+
+      const now = Date.now();
+      if (now < backGuardDeadlineRef.current) {
+        if (backGuardTimerRef.current !== null) {
+          window.clearTimeout(backGuardTimerRef.current);
+          backGuardTimerRef.current = null;
+        }
+        backGuardDeadlineRef.current = 0;
+        setBackGuardVisible(false);
+        return 'exit';
+      }
+
+      st.triggerAppHaptic('selection');
+      backGuardDeadlineRef.current = now + 2200;
+      setBackGuardVisible(true);
+      setBackGuardCycle((c) => c + 1);
+      if (backGuardTimerRef.current !== null) {
+        window.clearTimeout(backGuardTimerRef.current);
+      }
+      backGuardTimerRef.current = window.setTimeout(() => {
+        backGuardDeadlineRef.current = 0;
+        backGuardTimerRef.current = null;
+        setBackGuardVisible(false);
+      }, 2200);
+      return 'handled';
+    };
+
+    const dispose = installGlobalBackDispatcher(onRootBack, {
+      enableBrowserPopState: deviceEnv.isTouch,
+    });
+    return () => {
+      dispose();
+      if (backGuardTimerRef.current !== null) {
+        window.clearTimeout(backGuardTimerRef.current);
+        backGuardTimerRef.current = null;
+      }
+    };
+  }, [deviceEnv.isTouch]);
+
   const handleTrashDoc = useCallback(
     (docId: string) => {
       const target = documentsRef.current.find((d) => d.id === docId);
@@ -2309,6 +2504,7 @@ export function App() {
                 onClick={() => {
                   triggerAppHaptic('medium');
                   setRevisionOrbMenuOpen(false);
+                  if (revisionExitGuardRef.current?.()) return;
                   setRevisionMode(false);
                 }}
               >
@@ -2569,6 +2765,7 @@ export function App() {
           canRedo={activeHistory?.canRedo() ?? false}
           revisionMode={revisionMode}
           onSetRevisionMode={setRevisionMode}
+          onExitRevisionGuardRef={revisionExitGuardRef}
           onUndo={handleUndo}
           onRedo={handleRedo}
           onFormatChange={(fmt) =>
@@ -3034,6 +3231,50 @@ export function App() {
             if (!tutorialMode) setTrashModalOpen(false);
           }}
         />
+      )}
+
+      {backGuardVisible && (
+        <div
+          className="arc-back-guard-banner"
+          role="status"
+          aria-live="polite"
+          onClick={() => {
+            if (backGuardTimerRef.current !== null) {
+              window.clearTimeout(backGuardTimerRef.current);
+              backGuardTimerRef.current = null;
+            }
+            backGuardDeadlineRef.current = 0;
+            setBackGuardVisible(false);
+          }}
+        >
+          <span className="arc-back-guard-icon" aria-hidden="true">
+            <ShieldAlert size={15} />
+          </span>
+          <div className="arc-back-guard-copy">
+            <span className="arc-back-guard-title">
+              {settings.locale === 'zh-CN'
+                ? '再按一次返回键退出穹档'
+                : 'Press Back again to exit ArcVault'}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="arc-back-guard-close"
+            aria-label={settings.locale === 'zh-CN' ? '取消退出' : 'Dismiss'}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (backGuardTimerRef.current !== null) {
+                window.clearTimeout(backGuardTimerRef.current);
+                backGuardTimerRef.current = null;
+              }
+              backGuardDeadlineRef.current = 0;
+              setBackGuardVisible(false);
+            }}
+          >
+            <X size={13} />
+          </button>
+          <span key={backGuardCycle} className="arc-back-guard-progress" aria-hidden="true" />
+        </div>
       )}
 
       {toast && (

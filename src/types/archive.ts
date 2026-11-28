@@ -524,6 +524,8 @@ export interface SyncSettings {
   lastSyncedAt?: string;
 }
 
+export type AiThinkingEffort = 'low' | 'medium' | 'high';
+
 export interface AppSettings {
   theme: ThemeId;
   locale: Locale;
@@ -535,6 +537,9 @@ export interface AppSettings {
   aiEndpoint: string;
   aiModel: string;
   aiApiKey: string;
+  aiLocalModelPath?: string;
+  aiDeepThinking?: boolean;
+  aiThinkingEffort?: AiThinkingEffort;
   skills?: AiSkill[];
   phrasebank?: PhrasebankSettings;
   watchDirectory: string;

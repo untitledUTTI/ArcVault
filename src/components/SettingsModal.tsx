@@ -39,6 +39,8 @@ import {
   MoveVertical,
   ExternalLink,
   Scale,
+  Brain,
+  FileCode2,
 } from 'lucide-react';
 import { OPEN_SOURCE_PROJECTS } from '../core/openSourceLicenses';
 import {
@@ -71,7 +73,12 @@ import {
   normalizeScrollScrubberSettings,
   resolveThemeScrubberShape,
 } from './TouchScrollScrubber';
-import { testAiConnection } from '../core/aiGateway';
+import {
+  AI_CLOUD_FREE_PRESETS,
+  AI_CLOUD_GENERAL_PRESETS,
+  AI_LOCAL_RUNTIME_PRESETS,
+  testAiConnection,
+} from '../core/aiGateway';
 import {
   SKILL_CATEGORY_META,
   exportSkillAsMarkdown,
@@ -79,7 +86,11 @@ import {
   parseSkillFileContent,
   resolveMergedSkills,
 } from '../core/skillRegistry';
-import { triggerBrowserDownload } from '../platform/bridge';
+import {
+  nativePickLocalModelDirectory,
+  nativePickLocalModelFile,
+  triggerBrowserDownload,
+} from '../platform/bridge';
 import {
   DEFAULT_TYPOGRAPHY,
   resolveEditorFontStack,
@@ -106,6 +117,7 @@ import {
 import { resolveWeatherThemePalette } from '../core/weatherTheme';
 import type {
   AiSkill,
+  AiThinkingEffort,
   AppSettings,
   BackupFormat,
   CelestialMood,
@@ -307,6 +319,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [testing, setTesting] = useState(false);
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
   const skillFileInputRef = useRef<HTMLInputElement>(null);
+  const localModelFileInputRef = useRef<HTMLInputElement>(null);
 
   const [skillCategoryFilter, setSkillCategoryFilter] = useState<'all' | SkillCategory>('all');
   const [expandedSkillId, setExpandedSkillId] = useState<string | null>(null);
@@ -2724,82 +2737,357 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </button>
                     <button
                       className={settings.aiProvider === 'openai-compatible' ? 'active' : ''}
-                      onClick={() =>
+                      onClick={() => {
+                        const isLocalEp =
+                          settings.aiEndpoint.includes('11434') ||
+                          settings.aiEndpoint.includes('1234') ||
+                          settings.aiEndpoint.includes('8080') ||
+                          settings.aiEndpoint.includes('8000') ||
+                          settings.aiEndpoint.includes('localhost') ||
+                          settings.aiEndpoint.includes('127.0.0.1');
                         onUpdate({
                           aiProvider: 'openai-compatible',
-                          aiEndpoint: settings.aiEndpoint.includes('11434')
-                            ? 'https://api.deepseek.com/v1'
+                          aiEndpoint: isLocalEp
+                            ? 'https://api.siliconflow.cn/v1'
                             : settings.aiEndpoint,
-                          aiModel: settings.aiModel.includes(':') ? 'deepseek-chat' : settings.aiModel,
-                        })
-                      }
+                          aiModel:
+                            settings.aiModel.includes(':') || settings.aiModel === 'local-model'
+                              ? 'Qwen/Qwen2.5-7B-Instruct'
+                              : settings.aiModel,
+                        });
+                      }}
                     >
                       {isZh ? '云端 OpenAI 兼容 API' : 'Cloud OpenAI-Compatible'}
                     </button>
                     <button
                       className={settings.aiProvider === 'ollama' ? 'active' : ''}
-                      onClick={() =>
+                      onClick={() => {
+                        const isCloudEp = settings.aiEndpoint.trim().startsWith('https://');
                         onUpdate({
                           aiProvider: 'ollama',
-                          aiEndpoint: 'http://localhost:11434/v1',
-                          aiModel: 'qwen2.5:14b',
-                        })
-                      }
+                          aiEndpoint:
+                            isCloudEp || !settings.aiEndpoint.trim()
+                              ? 'http://localhost:11434/v1'
+                              : settings.aiEndpoint,
+                          aiModel:
+                            !settings.aiModel.trim() ||
+                            settings.aiModel.includes('deepseek-chat') ||
+                            settings.aiModel.includes('gpt-') ||
+                            settings.aiModel.includes('glm-') ||
+                            settings.aiModel.includes('ernie-') ||
+                            settings.aiModel.includes('hunyuan-')
+                              ? 'qwen3:8b'
+                              : settings.aiModel,
+                        });
+                      }}
                     >
-                      {isZh ? '本地 Ollama（不出本机）' : 'Local Ollama (On-Device)'}
+                      {isZh ? '本地模型（不出本机）' : 'Local Model (On-Device)'}
                     </button>
                   </div>
 
                   {settings.aiProvider === 'openai-compatible' && (
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                      {[
-                        { label: 'DeepSeek', ep: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-                        { label: 'OpenAI', ep: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
-                        { label: isZh ? '硅基流动' : 'SiliconFlow', ep: 'https://api.siliconflow.cn/v1', model: 'Qwen/Qwen2.5-72B-Instruct' },
-                      ].map((p) => (
-                        <button
-                          key={p.label}
-                          className="arc-btn"
-                          style={{ height: 26, fontSize: 11.5 }}
-                          onClick={() => onUpdate({ aiEndpoint: p.ep, aiModel: p.model })}
-                        >
-                          {isZh ? `预设：${p.label}` : `Preset: ${p.label}`}
-                        </button>
-                      ))}
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 600, color: '#16a34a', marginBottom: 6 }}>
+                        {isZh ? '国内可访问免费模型（点击一键填入）：' : 'China-Accessible Free Models (One-Click Preset):'}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                        {AI_CLOUD_FREE_PRESETS.map((p) => {
+                          const isSelected =
+                            settings.aiEndpoint === p.endpoint && settings.aiModel === p.model;
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              className={`arc-btn ${isSelected ? 'arc-btn-primary' : ''}`}
+                              style={{ height: 27, fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                              onClick={() => onUpdate({ aiEndpoint: p.endpoint, aiModel: p.model })}
+                            >
+                              <span>{isZh ? p.labelZh : p.labelEn}</span>
+                              {(p.badgeZh || p.badgeEn) && (
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    padding: '1px 5px',
+                                    borderRadius: 999,
+                                    background: isSelected ? 'rgba(255,255,255,0.22)' : 'rgba(22,163,74,0.14)',
+                                    color: isSelected ? 'inherit' : '#16a34a',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {isZh ? p.badgeZh : p.badgeEn}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 6 }}>
+                        {isZh ? '其他常用预设：' : 'Other Common Presets:'}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                        {AI_CLOUD_GENERAL_PRESETS.map((p) => {
+                          const isSelected =
+                            settings.aiEndpoint === p.endpoint && settings.aiModel === p.model;
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              className={`arc-btn ${isSelected ? 'arc-btn-primary' : ''}`}
+                              style={{ height: 26, fontSize: 11.5 }}
+                              onClick={() => onUpdate({ aiEndpoint: p.endpoint, aiModel: p.model })}
+                            >
+                              {isZh ? p.labelZh : p.labelEn}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                        {isZh
+                          ? '提示：上述国内平台均可直连（无需代理），在对应官网注册并生成免费 API Key / Token 填入下方即可使用。'
+                          : 'Tip: All domestic presets above are directly accessible in China; sign up on the provider console for a free API Key/Token.'}
+                      </div>
+                    </div>
+                  )}
+
+                  {settings.aiProvider === 'ollama' && (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 6 }}>
+                        {isZh ? '本地模型运行后端预设（兼容 OpenAI / 原生协议）：' : 'Local Runtime Presets (OpenAI-Compatible / Native):'}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                        {AI_LOCAL_RUNTIME_PRESETS.map((p) => {
+                          const isSelected = settings.aiEndpoint === p.endpoint;
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              className={`arc-btn ${isSelected ? 'arc-btn-primary' : ''}`}
+                              style={{ height: 26, fontSize: 11.5 }}
+                              onClick={() => onUpdate({ aiEndpoint: p.endpoint, aiModel: p.model })}
+                            >
+                              {isZh ? p.labelZh : p.labelEn}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          background: 'var(--bg-surface)',
+                          border: '1px solid var(--border-subtle)',
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
+                          {isZh ? '自定义本地模型路径（模型文件或目录）' : 'Custom Local Model Path (File or Directory)'}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                          <input
+                            className="arc-input"
+                            style={{ flex: '1 1 220px' }}
+                            value={settings.aiLocalModelPath ?? ''}
+                            onChange={(e) => onUpdate({ aiLocalModelPath: e.target.value })}
+                            placeholder={
+                              isZh
+                                ? '例如：D:\\Models\\Qwen3-8B-Q4_K_M.gguf 或 D:\\OllamaModels'
+                                : 'e.g., /models/Qwen3-8B-Q4_K_M.gguf or /path/to/models'
+                            }
+                          />
+                          <input
+                            ref={localModelFileInputRef}
+                            type="file"
+                            accept=".gguf,.onnx,.safetensors,.bin,.pt,.pth,.mlmodel,.tflite"
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const patch: Partial<AppSettings> = { aiLocalModelPath: file.name };
+                                if (!settings.aiModel.trim() || settings.aiModel === 'local-model') {
+                                  patch.aiModel = file.name;
+                                }
+                                onUpdate(patch);
+                              }
+                              e.target.value = '';
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="arc-btn"
+                            style={{ height: 32, fontSize: 12 }}
+                            onClick={async () => {
+                              const picked = await nativePickLocalModelFile();
+                              if (picked) {
+                                const fileName = picked.split(/[/\\]+/).filter(Boolean).pop() ?? '';
+                                const patch: Partial<AppSettings> = { aiLocalModelPath: picked };
+                                if (
+                                  fileName &&
+                                  (!settings.aiModel.trim() || settings.aiModel === 'local-model')
+                                ) {
+                                  patch.aiModel = fileName;
+                                }
+                                onUpdate(patch);
+                              } else if (!runtimeInfo.isTauri) {
+                                localModelFileInputRef.current?.click();
+                              }
+                            }}
+                          >
+                            <FileCode2 size={13} />
+                            <span>{isZh ? '选择模型文件' : 'Pick File'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="arc-btn"
+                            style={{ height: 32, fontSize: 12 }}
+                            onClick={async () => {
+                              const picked = await nativePickLocalModelDirectory();
+                              if (picked) {
+                                onUpdate({ aiLocalModelPath: picked });
+                              }
+                            }}
+                          >
+                            <FolderOpen size={13} />
+                            <span>{isZh ? '选择目录' : 'Pick Folder'}</span>
+                          </button>
+                          {(settings.aiLocalModelPath ?? '').trim() && (
+                            <button
+                              type="button"
+                              className="arc-btn"
+                              style={{ height: 32, fontSize: 12 }}
+                              onClick={() => onUpdate({ aiLocalModelPath: '' })}
+                            >
+                              <X size={13} />
+                              <span>{isZh ? '清空' : 'Clear'}</span>
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+                          {isZh
+                            ? '支持记录本机 .gguf / .onnx / .safetensors 权重路径或模型存储目录；若下方「模型名称」留空，将自动提取路径末段文件名作为请求模型标识。'
+                            : 'Stores your local .gguf / .onnx / .safetensors file or model folder path. If Model Name below is empty, the filename is automatically used.'}
+                        </div>
+                      </div>
                     </div>
                   )}
 
                   {settings.aiProvider !== 'offline-smart' && (
-                    <div className="arc-settings-grid-2" style={{ gap: 10 }}>
-                      <label>
-                        <div style={{ marginBottom: 4, color: 'var(--text-secondary)' }}>{isZh ? '接口地址（Endpoint）' : 'Endpoint URL'}</div>
-                        <input
-                          className="arc-input"
-                          value={settings.aiEndpoint}
-                          onChange={(e) => onUpdate({ aiEndpoint: e.target.value })}
-                        />
-                      </label>
-                      <label>
-                        <div style={{ marginBottom: 4, color: 'var(--text-secondary)' }}>{isZh ? '模型名称（Model）' : 'Model Name'}</div>
-                        <input
-                          className="arc-input"
-                          value={settings.aiModel}
-                          onChange={(e) => onUpdate({ aiModel: e.target.value })}
-                        />
-                      </label>
-                      {settings.aiProvider === 'openai-compatible' && (
-                        <label style={{ gridColumn: '1 / -1' }}>
-                          <div style={{ marginBottom: 4, color: 'var(--text-secondary)' }}>{isZh ? 'API Key（仅存本机）' : 'API Key (Stored Locally Only)'}</div>
+                    <>
+                      <div className="arc-settings-grid-2" style={{ gap: 10 }}>
+                        <label>
+                          <div style={{ marginBottom: 4, color: 'var(--text-secondary)' }}>{isZh ? '接口地址（Endpoint）' : 'Endpoint URL'}</div>
                           <input
                             className="arc-input"
-                            type="password"
-                            value={settings.aiApiKey}
-                            onChange={(e) => onUpdate({ aiApiKey: e.target.value })}
-                            placeholder="sk-..."
+                            value={settings.aiEndpoint}
+                            onChange={(e) => onUpdate({ aiEndpoint: e.target.value })}
                           />
                         </label>
-                      )}
-                    </div>
+                        <label>
+                          <div style={{ marginBottom: 4, color: 'var(--text-secondary)' }}>{isZh ? '模型名称（Model）' : 'Model Name'}</div>
+                          <input
+                            className="arc-input"
+                            value={settings.aiModel}
+                            onChange={(e) => onUpdate({ aiModel: e.target.value })}
+                          />
+                        </label>
+                        {settings.aiProvider === 'openai-compatible' && (
+                          <label style={{ gridColumn: '1 / -1' }}>
+                            <div style={{ marginBottom: 4, color: 'var(--text-secondary)' }}>{isZh ? 'API Key（仅存本机）' : 'API Key (Stored Locally Only)'}</div>
+                            <input
+                              className="arc-input"
+                              type="password"
+                              value={settings.aiApiKey}
+                              onChange={(e) => onUpdate({ aiApiKey: e.target.value })}
+                              placeholder="sk-..."
+                            />
+                          </label>
+                        )}
+                      </div>
+
+                      {(() => {
+                        const deepThinking = settings.aiDeepThinking ?? true;
+                        const thinkingEffort: AiThinkingEffort = settings.aiThinkingEffort ?? 'medium';
+                        return (
+                          <div
+                            style={{
+                              marginTop: 12,
+                              padding: '10px 12px',
+                              borderRadius: 10,
+                              background: 'var(--bg-surface)',
+                              border: '1px solid var(--border-subtle)',
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 10,
+                                flexWrap: 'wrap',
+                                marginBottom: 8,
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Brain size={15} color="var(--accent)" />
+                                <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                  {isZh ? '深度思考（Deep Thinking）' : 'Deep Thinking'}
+                                </span>
+                                <span className="arc-badge" style={{ fontSize: 10.5 }}>
+                                  {deepThinking ? (isZh ? '默认开启' : 'Default On') : isZh ? '已关闭' : 'Off'}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                className={`arc-btn ${deepThinking ? 'arc-btn-primary' : ''}`}
+                                style={{ height: 28, fontSize: 12 }}
+                                onClick={() => onUpdate({ aiDeepThinking: !deepThinking })}
+                              >
+                                {deepThinking ? (isZh ? '已开启' : 'Enabled') : isZh ? '已关闭' : 'Disabled'}
+                              </button>
+                            </div>
+
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 10,
+                                flexWrap: 'wrap',
+                                opacity: deepThinking ? 1 : 0.52,
+                              }}
+                            >
+                              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                {isZh ? '模型思考程度（Thinking Effort）' : 'Thinking Effort'}
+                              </span>
+                              <div className="arc-segmented" style={{ margin: 0 }}>
+                                {(
+                                  [
+                                    { id: 'low', label: isZh ? '低 (low)' : 'Low' },
+                                    { id: 'medium', label: isZh ? '中 (medium)' : 'Medium' },
+                                    { id: 'high', label: isZh ? '高 (high)' : 'High' },
+                                  ] as Array<{ id: AiThinkingEffort; label: string }>
+                                ).map((opt) => (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    disabled={!deepThinking}
+                                    className={thinkingEffort === opt.id ? 'active' : ''}
+                                    onClick={() => onUpdate({ aiThinkingEffort: opt.id })}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 7, lineHeight: 1.5 }}>
+                              {isZh
+                                ? '同时适用于云端与本地推理模型（DeepSeek-R1 / Qwen3 / GLM / Ollama / llama.cpp 等）；若所选模型不支持推理参数，网关会自动回退标准请求，并自动过滤回复中的 <think> 过程标签。'
+                                : 'Applies to both Cloud & Local reasoning models (DeepSeek-R1, Qwen3, GLM, Ollama, llama.cpp); automatically falls back for non-reasoning models and strips <think> blocks.'}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </>
                   )}
 
                   <div

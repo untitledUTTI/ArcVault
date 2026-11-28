@@ -261,6 +261,31 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<String?> pickLocalModelFile() async {
+    final res = await FilePicker.platform.pickFiles(type: FileType.any);
+    if (res == null || res.files.isEmpty) return null;
+    final file = res.files.first;
+    final path = (file.path ?? '').trim().isNotEmpty ? file.path!.trim() : file.name.trim();
+    if (path.isEmpty) return null;
+    final fileName = file.name.trim();
+    final shouldFillModel = _settings.aiModel.trim().isEmpty || _settings.aiModel == 'local-model';
+    await updateSettings(_settings.copyWith(
+      aiLocalModelPath: path,
+      aiModel: shouldFillModel && fileName.isNotEmpty ? fileName : _settings.aiModel,
+    ));
+    showToast(_settings.locale.isZh ? '已设置本地模型路径' : 'Local model path updated');
+    return path;
+  }
+
+  Future<String?> pickLocalModelDirectory() async {
+    final picked = await FilePicker.platform.getDirectoryPath();
+    if (picked == null || picked.trim().isEmpty) return null;
+    final path = picked.trim();
+    await updateSettings(_settings.copyWith(aiLocalModelPath: path));
+    showToast(_settings.locale.isZh ? '已设置本地模型目录' : 'Local model directory updated');
+    return path;
+  }
+
   void selectSpace(String spaceId) {
     _activeSpaceId = spaceId;
     final docs = activeSpaceDocuments;

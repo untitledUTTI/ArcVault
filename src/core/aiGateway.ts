@@ -9,7 +9,135 @@ import {
   buildPhrasebankSystemDirective,
   isPhrasebankAiPriorityEnabled,
 } from './phrasebank/phrasebankAiDirective';
-import type { AiPrivacyPolicy, AnnotationItem, AppSettings, SkillTaskType } from '../types/archive';
+import type {
+  AiPrivacyPolicy,
+  AiThinkingEffort,
+  AnnotationItem,
+  AppSettings,
+  SkillTaskType,
+} from '../types/archive';
+
+export interface AiEndpointPreset {
+  id: string;
+  labelZh: string;
+  labelEn: string;
+  endpoint: string;
+  model: string;
+  badgeZh?: string;
+  badgeEn?: string;
+}
+
+export const AI_CLOUD_FREE_PRESETS: AiEndpointPreset[] = [
+  {
+    id: 'sf-qwen25-7b',
+    labelZh: '硅基流动 · Qwen2.5-7B',
+    labelEn: 'SiliconFlow · Qwen2.5-7B',
+    endpoint: 'https://api.siliconflow.cn/v1',
+    model: 'Qwen/Qwen2.5-7B-Instruct',
+    badgeZh: '免费',
+    badgeEn: 'Free',
+  },
+  {
+    id: 'sf-deepseek-r1-7b',
+    labelZh: '硅基流动 · DeepSeek-R1-7B',
+    labelEn: 'SiliconFlow · DeepSeek-R1-7B',
+    endpoint: 'https://api.siliconflow.cn/v1',
+    model: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B',
+    badgeZh: '免费·推理',
+    badgeEn: 'Free·Reasoning',
+  },
+  {
+    id: 'zhipu-glm4-flash',
+    labelZh: '智谱 AI · GLM-4-Flash',
+    labelEn: 'Zhipu AI · GLM-4-Flash',
+    endpoint: 'https://open.bigmodel.cn/api/paas/v4',
+    model: 'glm-4-flash',
+    badgeZh: '免费',
+    badgeEn: 'Free',
+  },
+  {
+    id: 'modelscope-qwen25-72b',
+    labelZh: '魔搭 · Qwen2.5-72B',
+    labelEn: 'ModelScope · Qwen2.5-72B',
+    endpoint: 'https://api-inference.modelscope.cn/v1',
+    model: 'Qwen/Qwen2.5-72B-Instruct',
+    badgeZh: '每日免费',
+    badgeEn: 'Daily Free',
+  },
+  {
+    id: 'hunyuan-lite',
+    labelZh: '腾讯混元 · Hunyuan-Lite',
+    labelEn: 'Tencent Hunyuan-Lite',
+    endpoint: 'https://api.hunyuan.cloud.tencent.com/v1',
+    model: 'hunyuan-lite',
+    badgeZh: '免费',
+    badgeEn: 'Free',
+  },
+  {
+    id: 'qianfan-ernie-speed',
+    labelZh: '百度千帆 · ERNIE-Speed',
+    labelEn: 'Baidu ERNIE-Speed',
+    endpoint: 'https://qianfan.baidubce.com/v2',
+    model: 'ernie-speed-128k',
+    badgeZh: '免费',
+    badgeEn: 'Free',
+  },
+];
+
+export const AI_CLOUD_GENERAL_PRESETS: AiEndpointPreset[] = [
+  {
+    id: 'deepseek-chat',
+    labelZh: 'DeepSeek Chat',
+    labelEn: 'DeepSeek Chat',
+    endpoint: 'https://api.deepseek.com/v1',
+    model: 'deepseek-chat',
+  },
+  {
+    id: 'deepseek-reasoner',
+    labelZh: 'DeepSeek R1',
+    labelEn: 'DeepSeek R1',
+    endpoint: 'https://api.deepseek.com/v1',
+    model: 'deepseek-reasoner',
+  },
+  {
+    id: 'openai-gpt4o-mini',
+    labelZh: 'OpenAI',
+    labelEn: 'OpenAI',
+    endpoint: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini',
+  },
+];
+
+export const AI_LOCAL_RUNTIME_PRESETS: AiEndpointPreset[] = [
+  {
+    id: 'local-ollama',
+    labelZh: 'Ollama',
+    labelEn: 'Ollama',
+    endpoint: 'http://localhost:11434/v1',
+    model: 'qwen3:8b',
+  },
+  {
+    id: 'local-lmstudio',
+    labelZh: 'LM Studio',
+    labelEn: 'LM Studio',
+    endpoint: 'http://localhost:1234/v1',
+    model: 'local-model',
+  },
+  {
+    id: 'local-llamacpp',
+    labelZh: 'llama.cpp',
+    labelEn: 'llama.cpp',
+    endpoint: 'http://localhost:8080/v1',
+    model: 'local-model',
+  },
+  {
+    id: 'local-vllm',
+    labelZh: 'vLLM',
+    labelEn: 'vLLM',
+    endpoint: 'http://localhost:8000/v1',
+    model: 'Qwen/Qwen3-8B',
+  },
+];
 
 export class AiPrivacyBlockedError extends Error {
   readonly policy: AiPrivacyPolicy;
@@ -19,7 +147,7 @@ export class AiPrivacyBlockedError extends Error {
     const msg =
       policy === 'disabled'
         ? '当前文档或空间已完全禁止 AI 访问（仅本地规则分析可用）。'
-        : `隐私保护拦截：当前文档锁定为「仅本地 AI (${policy})」，已阻止将文本发送至云端接口 (${provider})。请改用本地 Ollama 或离线智能引擎。`;
+        : `隐私保护拦截：当前文档锁定为「仅本地 AI (${policy})」，已阻止将文本发送至云端接口 (${provider})。请改用本地模型或离线智能引擎。`;
     super(msg);
     this.name = 'AiPrivacyBlockedError';
     this.policy = policy;
@@ -51,11 +179,48 @@ export function guardAiPrivacy(
   }
 }
 
-function normalizeChatCompletionsUrl(endpoint: string): string {
+export function normalizeChatCompletionsUrl(endpoint: string): string {
   const trimmed = endpoint.trim().replace(/\/+$/, '');
-  if (trimmed.endsWith('/chat/completions')) return trimmed;
-  if (trimmed.endsWith('/v1')) return `${trimmed}/chat/completions`;
+  if (!trimmed) return 'http://localhost:11434/v1/chat/completions';
+  if (trimmed.endsWith('/chat/completions') || trimmed.endsWith('/api/chat')) return trimmed;
+  if (/\/v\d+(?:alpha|beta)?$/i.test(trimmed)) return `${trimmed}/chat/completions`;
   return `${trimmed}/v1/chat/completions`;
+}
+
+export function extractLocalModelName(localPath?: string): string {
+  const trimmed = (localPath ?? '').trim();
+  if (!trimmed) return '';
+  const parts = trimmed.split(/[/\\]+/).filter(Boolean);
+  return parts[parts.length - 1] ?? '';
+}
+
+export function buildThinkingRequestFields(
+  url: string,
+  deepThinking: boolean,
+  effort: AiThinkingEffort,
+): Record<string, unknown> {
+  const lower = url.toLowerCase();
+  if (lower.endsWith('/api/chat')) {
+    return { think: deepThinking ? effort : false };
+  }
+  if (
+    lower.includes('siliconflow.cn') ||
+    lower.includes('modelscope.cn') ||
+    lower.includes('dashscope.aliyuncs.com')
+  ) {
+    return deepThinking
+      ? { enable_thinking: true, reasoning_effort: effort }
+      : { enable_thinking: false };
+  }
+  if (lower.includes('bigmodel.cn')) {
+    return { thinking: { type: deepThinking ? 'enabled' : 'disabled' } };
+  }
+  return { reasoning_effort: deepThinking ? effort : 'none' };
+}
+
+export function stripThinkingTags(text: string): string {
+  const cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  return cleaned || text.trim();
 }
 
 export async function callAiChat(params: {
@@ -134,19 +299,43 @@ export async function callAiChat(params: {
     headers.Authorization = `Bearer ${settings.aiApiKey.trim()}`;
   }
 
+  const deepThinking = settings.aiDeepThinking ?? true;
+  const effort: AiThinkingEffort = settings.aiThinkingEffort ?? 'medium';
+  const resolvedModel =
+    settings.aiModel.trim() ||
+    (settings.aiProvider === 'ollama'
+      ? extractLocalModelName(settings.aiLocalModelPath) || 'qwen3:8b'
+      : 'deepseek-chat');
+
+  const basePayload: Record<string, unknown> = {
+    model: resolvedModel,
+    messages: [
+      { role: 'system', content: finalSystemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    temperature: 0.3,
+  };
+  if (url.toLowerCase().endsWith('/api/chat')) {
+    basePayload.stream = false;
+  }
+
+  const thinkingFields = buildThinkingRequestFields(url, deepThinking, effort);
+  const primaryPayload = { ...basePayload, ...thinkingFields };
+
   try {
-    const resp = await fetch(url, {
+    let resp = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        model: settings.aiModel || (settings.aiProvider === 'ollama' ? 'qwen2.5:14b' : 'deepseek-chat'),
-        messages: [
-          { role: 'system', content: finalSystemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.3,
-      }),
+      body: JSON.stringify(primaryPayload),
     });
+
+    if ((resp.status === 400 || resp.status === 422) && Object.keys(thinkingFields).length > 0) {
+      resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(basePayload),
+      });
+    }
 
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}`);
@@ -156,12 +345,13 @@ export async function callAiChat(params: {
       choices?: Array<{ message?: { content?: string } }>;
       message?: { content?: string };
     };
-    const content = data.choices?.[0]?.message?.content ?? data.message?.content ?? '';
-    if (!content.trim()) {
+    const rawContent = data.choices?.[0]?.message?.content ?? data.message?.content ?? '';
+    const content = stripThinkingTags(rawContent);
+    if (!content) {
       throw new Error('Empty AI response');
     }
     return {
-      text: content.trim(),
+      text: content,
       source: settings.aiProvider === 'ollama' ? 'ollama' : 'cloud',
       appliedSkillNames,
       phrasebankPriorityApplied,
@@ -285,6 +475,10 @@ export async function testAiConnection(
       message: `离线智能启发式引擎已就绪（零网络、零费用、100% 本地隐私${skillHint}）。`,
     };
   }
+  const deepThinking = settings.aiDeepThinking ?? true;
+  const effort: AiThinkingEffort = settings.aiThinkingEffort ?? 'medium';
+  const thinkingHint = ` · 深度思考：${deepThinking ? `开 (${effort})` : '关'}`;
+
   try {
     const res = await callAiChat({
       settings,
@@ -296,16 +490,22 @@ export async function testAiConnection(
       skipSkills: true,
       skipPhrasebankGuide: true,
     });
+    const sourceLabel = res.source === 'ollama' ? '本地模型' : '云端 API';
     return {
       ok: true,
       latencyMs: Date.now() - start,
-      message: `连接成功（${res.source}，耗时 ${Date.now() - start}ms${skillHint}）：${res.text.slice(0, 40)}`,
+      message: `连接成功（${sourceLabel}，耗时 ${Date.now() - start}ms${thinkingHint}${skillHint}）：${res.text.slice(0, 40)}`,
     };
   } catch (err) {
+    const localPath = settings.aiLocalModelPath?.trim();
+    const pathHint =
+      settings.aiProvider === 'ollama' && localPath
+        ? `（已设置本地路径：${localPath}，请确认本地推理服务已启动并加载模型）`
+        : '';
     return {
       ok: false,
       latencyMs: Date.now() - start,
-      message: `连接失败：${err instanceof Error ? err.message : String(err)}`,
+      message: `连接失败：${err instanceof Error ? err.message : String(err)}${pathHint}`,
     };
   }
 }

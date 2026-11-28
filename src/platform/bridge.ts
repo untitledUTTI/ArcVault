@@ -78,6 +78,38 @@ export async function nativePickVaultDirectory(): Promise<string | null> {
   return null;
 }
 
+export async function nativePickLocalModelFile(): Promise<string | null> {
+  if (isTauriRuntime()) {
+    try {
+      return await invoke<string | null>('pick_local_model_file');
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+export async function nativePickLocalModelDirectory(): Promise<string | null> {
+  if (isTauriRuntime()) {
+    try {
+      return await invoke<string | null>('pick_local_model_directory');
+    } catch {
+      return null;
+    }
+  }
+  const picker = (window as unknown as { showDirectoryPicker?: () => Promise<{ name: string }> })
+    .showDirectoryPicker;
+  if (typeof picker === 'function') {
+    try {
+      const handle = await picker();
+      return handle?.name ? handle.name : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export async function nativeSetCustomVaultDir(path: string): Promise<{
   isTauri: boolean;
   platform: string;

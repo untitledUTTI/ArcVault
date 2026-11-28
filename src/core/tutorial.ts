@@ -421,7 +421,7 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
     badge: '智能辅助',
     summary: '内置三档 AI 隐私锁、学术句库胶囊、一致性体检官、Rebuttal 生成器与进化回放。',
     points: [
-      '三档隐私锁：支持“云端或本地 / 仅本地 Ollama / 完全禁用”，保险箱空间强制禁用云端 AI。',
+      '三档隐私锁：支持“云端或本地 / 仅本地模型 / 完全禁用”，保险箱空间强制禁用云端 AI。',
       '学术句库悬浮胶囊：快捷键 Alt+P（Mac 为 ⌥P）呼出常用学术表达、占位符与段落骨架。',
       '一致性体检 & 返修：自动核查摘要/图表/结论数值口径，一键生成中英文审稿回复草稿。',
       '动机留痕 & 进化回放：绑定导师邮件/科研资产快照，查看 14 天热力图并导出纪念海报。',
@@ -432,7 +432,7 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         moduleId: 'academic-ai',
         title: '切换文档级三档 AI 隐私锁',
         description:
-          '编辑器顶部栏集成了当前文档的隐私闸门、Skills 状态与学术句库开关。点击高亮的「AI 隐私锁」按钮即可在「云端或本地 → 仅本地 Ollama → 完全禁用 AI」之间实时切换。请点击一次按钮试试：',
+          '编辑器顶部栏集成了当前文档的隐私闸门、Skills 状态与学术句库开关。点击高亮的「AI 隐私锁」按钮即可在「云端或本地 → 仅本地模型 → 完全禁用 AI」之间实时切换。请点击一次按钮试试：',
         scene: 'editor-ai-bar',
         targetSelectors: ['[data-tour="editor-ai-bar"]'],
         preferredPlacement: 'bottom',
@@ -538,7 +538,7 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
     summary: '提供六套动态与护眼主题，多端交互深度适配，并支持带原封面与修订红线的 Word 导出。',
     points: [
       '六大主题：浅色极简、深邃夜色、护眼纸感、M3 莫奈动态取色、天象光影、实时天气。',
-      'AI 与多端设置：可配置云端/Ollama 模型、导入 Markdown Skills，并在电脑端模拟手机/平板预览。',
+      'AI 与多端设置：可配置云端/本地模型、导入 Markdown Skills，并在电脑端模拟手机/平板预览。',
       '无损导出：支持导出带原封面的交付版 Word、带修订红线的对比版 Word，以及 .md / .tex。',
     ],
     steps: [
@@ -558,7 +558,7 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         moduleId: 'themes-multidevice',
         title: 'AI 模型、Skills 技能包与多端适配设置',
         description:
-          '设置中心已切换到「AI 与 Skills」页签：这里可以连接你的大模型接口或本地 Ollama、开关与导入自定义 Markdown Skill；左侧导航还可进入「排版字体」「多端预览与触感反馈」（含桌面端模拟手机/平板视图）。',
+          '设置中心已切换到「AI 与 Skills」页签：这里可以连接你的大模型接口或本地模型、开关与导入自定义 Markdown Skill；左侧导航还可进入「排版字体」「多端预览与触感反馈」（含桌面端模拟手机/平板视图）。',
         scene: 'settings-ai',
         targetSelectors: ['[data-tour="settings-modal"]'],
         preferredPlacement: 'bottom',

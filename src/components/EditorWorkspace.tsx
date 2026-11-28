@@ -35,6 +35,7 @@ import { normalizePhrasebankSettings } from '../core/phrasebank/phrasebankStorag
 import { computeAlignedScrollTargets } from '../core/annotationLayout';
 import type { DocumentScrollState } from '../core/workspaceLayout';
 import { formatShortcut, type DeviceEnvironment } from '../platform/device';
+import { registerBackHandler } from '../platform/backProtection';
 import { startResizeDrag } from '../platform/resizeDrag';
 import { getEnabledSkills } from '../core/skillRegistry';
 import type {
@@ -64,6 +65,7 @@ interface EditorWorkspaceProps {
   canRedo?: boolean;
   revisionMode?: boolean;
   onSetRevisionMode?: (open: boolean) => void;
+  onExitRevisionGuardRef?: React.MutableRefObject<(() => boolean) | null>;
   onUndo?: () => void;
   onRedo?: () => void;
   onFormatChange?: (fmt: EditorFormat) => void;
@@ -128,6 +130,7 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   canRedo = false,
   revisionMode = false,
   onSetRevisionMode,
+  onExitRevisionGuardRef,
   onUndo,
   onRedo,
   onFormatChange,
@@ -230,7 +233,10 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     showTextCustomizer: boolean;
     userTouchedColor: boolean;
     nextAnnId?: string;
+    exitRevisionAfter?: boolean;
   } | null>(null);
+  const suppressBlurConfirmRef = useRef(false);
+  const prevKeyboardOpenRef = useRef(false);
 
   // Detect soft keyboard open/close via visualViewport so portrait split-screen
   // adapts dynamically to whichever pane currently holds input focus.
@@ -758,6 +764,7 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     (
       sess: NonNullable<typeof paraSessionRef.current>,
       nextAnnId?: string,
+      exitRevisionAfter = false,
     ) => {
       const defaultSticker = allStickers[0] ?? DEFAULT_REVISION_STICKERS[0];
       return {
@@ -777,10 +784,103 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         showTextCustomizer: true,
         userTouchedColor: false,
         nextAnnId,
+        exitRevisionAfter,
       };
     },
     [allStickers],
   );
+
+  const triggerDirtyParaConfirm = useCallback(
+    (exitRevisionAfter = false): boolean => {
+      if (pendingParaConfirm) return true;
+      const sess = paraSessionRef.current;
+      if (!sess || !sess.dirty) return false;
+      suppressBlurConfirmRef.current = true;
+      activeParaTextareaRef.current?.blur();
+      setEditingParaStart(null);
+      onHaptic?.('warning');
+      setPendingParaConfirm((prev) => prev ?? buildParaConfirmState(sess, undefined, exitRevisionAfter));
+      window.setTimeout(() => {
+        suppressBlurConfirmRef.current = false;
+      }, 60);
+      return true;
+    },
+    [pendingParaConfirm, buildParaConfirmState, onHaptic],
+  );
+
+  useEffect(() => {
+    if (!onExitRevisionGuardRef) return;
+    onExitRevisionGuardRef.current = () => triggerDirtyParaConfirm(true);
+    return () => {
+      onExitRevisionGuardRef.current = null;
+    };
+  }, [onExitRevisionGuardRef, triggerDirtyParaConfirm]);
+
+  useEffect(() => {
+    const wasOpen = prevKeyboardOpenRef.current;
+    prevKeyboardOpenRef.current = keyboardOpen;
+    if (
+      wasOpen &&
+      !keyboardOpen &&
+      revisionMode &&
+      editingParaStart !== null &&
+      paraSessionRef.current?.dirty &&
+      !pendingParaConfirm
+    ) {
+      const timer = window.setTimeout(() => {
+        if (revisionMode && paraSessionRef.current?.dirty && !pendingParaConfirm) {
+          triggerDirtyParaConfirm(false);
+        }
+      }, 80);
+      return () => window.clearTimeout(timer);
+    }
+  }, [keyboardOpen, revisionMode, editingParaStart, pendingParaConfirm, triggerDirtyParaConfirm]);
+
+  useEffect(() => {
+    if (!revisionMode && !pendingParaConfirm && !longPressMenu && !mobilePbSheetOpen) return;
+    return registerBackHandler(() => {
+      if (pendingParaConfirm) {
+        if (pendingParaConfirm.step === 'pick-sticker') {
+          setPendingParaConfirm((prev) => (prev ? { ...prev, step: 'confirm' } : null));
+          return true;
+        }
+        if (pendingParaConfirm.revertConfirm) {
+          setPendingParaConfirm((prev) => (prev ? { ...prev, revertConfirm: false } : null));
+          return true;
+        }
+        const pStart = pendingParaConfirm.paraStart;
+        setPendingParaConfirm(null);
+        focusParaEditor(pStart);
+        return true;
+      }
+      if (revisionMode && paraSessionRef.current?.dirty) {
+        return triggerDirtyParaConfirm(false);
+      }
+      if (revisionMode && editingParaStart !== null) {
+        activeParaTextareaRef.current?.blur();
+        setEditingParaStart(null);
+        paraSessionRef.current = null;
+        return true;
+      }
+      if (longPressMenu) {
+        setLongPressMenu(null);
+        return true;
+      }
+      if (mobilePbSheetOpen) {
+        setMobilePbSheetOpen(false);
+        return true;
+      }
+      return false;
+    }, 50);
+  }, [
+    revisionMode,
+    pendingParaConfirm,
+    editingParaStart,
+    longPressMenu,
+    mobilePbSheetOpen,
+    focusParaEditor,
+    triggerDirtyParaConfirm,
+  ]);
 
   const handleRevisionSelectNote = useCallback(
     (nextId: string) => {
@@ -958,9 +1058,10 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                         }}
                         onBlur={() => {
                           setEditingParaStart(null);
+                          if (suppressBlurConfirmRef.current) return;
                           const sess = paraSessionRef.current;
                           if (sess && sess.paraStart === p.start && sess.dirty) {
-                            setPendingParaConfirm(buildParaConfirmState(sess));
+                            setPendingParaConfirm((prev) => prev ?? buildParaConfirmState(sess));
                           } else {
                             paraSessionRef.current = null;
                           }
@@ -993,7 +1094,11 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                 onFormatChange?.(activeFormat === 'markdown' ? 'latex' : 'markdown')
               }
               onToggleSplitPreview={() => onToggleSplitPreview?.()}
-              onOpenAnnotations={() => onSetRevisionMode?.(false)}
+              onOpenAnnotations={() => {
+                if (!triggerDirtyParaConfirm(true)) {
+                  onSetRevisionMode?.(false);
+                }
+              }}
               onTogglePhrasebank={() => {
                 if (!pbSettings.enabled) {
                   onUpdatePhrasebankSettings({ enabled: true, collapsed: false });
@@ -1468,9 +1573,14 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                         onHaptic?.('warning');
                         onTextChange(pendingParaConfirm.originalFullText);
                         const pStart = pendingParaConfirm.paraStart;
+                        const shouldExitRev = Boolean(pendingParaConfirm.exitRevisionAfter);
                         paraSessionRef.current = null;
                         setPendingParaConfirm(null);
-                        focusParaEditor(pStart);
+                        if (shouldExitRev) {
+                          onSetRevisionMode?.(false);
+                        } else {
+                          focusParaEditor(pStart);
+                        }
                       }}
                     >
                       {settings.locale === 'zh-CN' ? '确认回退' : 'Confirm Revert'}
@@ -1663,9 +1773,12 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                             },
                           ]);
                           const nextAnn = pendingParaConfirm.nextAnnId;
+                          const shouldExitRev = Boolean(pendingParaConfirm.exitRevisionAfter);
                           paraSessionRef.current = null;
                           setPendingParaConfirm(null);
-                          if (nextAnn) {
+                          if (shouldExitRev) {
+                            onSetRevisionMode?.(false);
+                          } else if (nextAnn) {
                             setSelectedId(nextAnn);
                           }
                         }}
