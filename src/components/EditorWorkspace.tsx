@@ -2132,11 +2132,11 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
             >
               {revisionMode
                 ? settings.locale === 'zh-CN'
-                  ? '退出修订模式'
-                  : 'Exit Revision Mode'
+                  ? '退出审阅模式'
+                  : 'Exit Review Mode'
                 : settings.locale === 'zh-CN'
-                  ? '进入修订模式'
-                  : 'Enter Revision Mode'}
+                  ? '进入审阅模式'
+                  : 'Enter Review Mode'}
             </button>
             {longPressMenu.annotationId && (
               <button

@@ -437,3 +437,113 @@ int _remapOffsetWithBatchEdits(
     affectedCount: totalAffected,
   );
 }
+
+class ParagraphSlice {
+  const ParagraphSlice({
+    required this.start,
+    required this.end,
+    required this.text,
+  });
+
+  final int start;
+  final int end;
+  final String text;
+}
+
+class AnnotatedParagraphBlock {
+  const AnnotatedParagraphBlock({
+    required this.start,
+    required this.end,
+    required this.text,
+    required this.annotations,
+  });
+
+  final int start;
+  final int end;
+  final String text;
+  final List<AnnotationItem> annotations;
+}
+
+List<ParagraphSlice> _splitNonEmptyParagraphs(String text) {
+  final paragraphs = <ParagraphSlice>[];
+  final lines = text.split('\n');
+  var cur = 0;
+  var blockStart = -1;
+  final blockLines = <String>[];
+
+  for (final line in lines) {
+    final lineStart = cur;
+    final lineEnd = cur + line.length;
+    if (line.trim().isNotEmpty) {
+      if (blockStart == -1) blockStart = lineStart;
+      blockLines.add(line);
+    } else if (blockStart != -1) {
+      paragraphs.add(ParagraphSlice(
+        start: blockStart,
+        end: lineStart - 1,
+        text: blockLines.join('\n'),
+      ));
+      blockStart = -1;
+      blockLines.clear();
+    }
+    cur = lineEnd + 1;
+  }
+
+  if (blockStart != -1) {
+    paragraphs.add(ParagraphSlice(
+      start: blockStart,
+      end: text.length,
+      text: blockLines.join('\n'),
+    ));
+  }
+  return paragraphs;
+}
+
+/// Extracts the non-empty paragraph block containing [offset] (separated by blank lines).
+ParagraphSlice extractParagraphAtOffset(String text, int offset) {
+  final clamped = offset.clamp(0, text.length);
+  final paragraphs = _splitNonEmptyParagraphs(text);
+  if (paragraphs.isEmpty) {
+    return ParagraphSlice(start: 0, end: text.length, text: text);
+  }
+  for (final p in paragraphs) {
+    if (clamped >= p.start && clamped <= p.end) return p;
+  }
+  for (final p in paragraphs) {
+    if (p.end >= clamped) return p;
+  }
+  return paragraphs.last;
+}
+
+/// Extracts only paragraphs that overlap with annotations/revisions for Review Mode.
+List<AnnotatedParagraphBlock> extractAnnotatedParagraphs(
+  String text,
+  List<AnnotationItem> annotations,
+) {
+  final validAnns = annotations
+      .where((a) =>
+          a.status == AnnotationStatus.open ||
+          a.status == AnnotationStatus.resolved ||
+          a.status == AnnotationStatus.accepted ||
+          a.status == AnnotationStatus.rejected)
+      .toList()
+    ..sort((a, b) => a.anchorStart.compareTo(b.anchorStart));
+  if (validAnns.isEmpty) return const [];
+
+  final paragraphs = _splitNonEmptyParagraphs(text);
+  final out = <AnnotatedParagraphBlock>[];
+  for (final p in paragraphs) {
+    final matching = validAnns
+        .where((a) => a.anchorEnd >= p.start && a.anchorStart <= p.end)
+        .toList();
+    if (matching.isNotEmpty) {
+      out.add(AnnotatedParagraphBlock(
+        start: p.start,
+        end: p.end,
+        text: p.text,
+        annotations: matching,
+      ));
+    }
+  }
+  return out;
+}

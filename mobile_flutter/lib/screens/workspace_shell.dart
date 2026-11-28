@@ -6,12 +6,12 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../core/device_layout.dart';
 import '../core/tutorial_flow.dart';
+import '../i18n/dictionaries.dart';
 import '../models/archive_models.dart';
 import '../state/app_controller.dart';
 import '../theme/arc_theme.dart';
 import '../widgets/annotation_sidebar.dart';
 import '../widgets/editor_workspace.dart';
-import '../widgets/mobile_annotation_sheet.dart';
 import '../widgets/mobile_quick_format_bar.dart';
 import '../widgets/modals/branch_modal.dart';
 import '../widgets/modals/camera_scan_modal.dart';
@@ -75,11 +75,32 @@ class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStat
     vsync: this,
     duration: const Duration(milliseconds: 2200),
   );
-  bool _annotationSheetOpen = false;
+  bool _reviewMode = false;
+  bool _reviewOrbMenuOpen = false;
+  bool Function()? _reviewBackHandler;
+  bool Function()? _exitReviewGuard;
   bool _timelineCollapsed = false;
   double _leftSidebarWidth = 264;
   double _rightSidebarWidth = 290;
   bool _sharePromptShown = false;
+
+  void _setReviewMode(bool open) {
+    if (open) {
+      setState(() {
+        _reviewMode = true;
+        _reviewOrbMenuOpen = false;
+      });
+      return;
+    }
+    if (_exitReviewGuard?.call() == true) {
+      setState(() => _reviewOrbMenuOpen = false);
+      return;
+    }
+    setState(() {
+      _reviewMode = false;
+      _reviewOrbMenuOpen = false;
+    });
+  }
 
   TutorialSceneId? _activeTutorialScene;
   _InlineModalType? _inlineModal;
@@ -150,7 +171,7 @@ class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStat
         return;
       }
       if (scene == TutorialSceneId.annotations &&
-          (!layout.isCompact || _annotationSheetOpen)) {
+          (!layout.isCompact || _reviewMode)) {
         return;
       }
       if (scene == TutorialSceneId.timelineDome &&
@@ -167,7 +188,8 @@ class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStat
       _activeTutorialScene = scene;
       _inlineModal = null;
       _drawerOpen = false;
-      _annotationSheetOpen = false;
+      _reviewMode = false;
+      _reviewOrbMenuOpen = false;
 
       switch (scene) {
         case TutorialSceneId.workspaceSidebar:
@@ -203,7 +225,7 @@ class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStat
         case TutorialSceneId.annotations:
           activateThesis();
           c.setSplitPreview(false);
-          if (layout.isCompact) _annotationSheetOpen = true;
+          if (layout.isCompact) _reviewMode = true;
           break;
 
         case TutorialSceneId.snapshotTopbar:
@@ -329,7 +351,8 @@ class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStat
       _activeTutorialScene = null;
       _inlineModal = null;
       _drawerOpen = false;
-      _annotationSheetOpen = false;
+      _reviewMode = false;
+      _reviewOrbMenuOpen = false;
     });
     _drawerAnim.reverse();
     c.ensureDemoSceneDocument('doc_thesis_demo', 'sp_paper');
@@ -382,8 +405,15 @@ class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStat
           _setDrawerOpen(false);
           return;
         }
-        if (_annotationSheetOpen) {
-          setState(() => _annotationSheetOpen = false);
+        if (_reviewOrbMenuOpen) {
+          setState(() => _reviewOrbMenuOpen = false);
+          return;
+        }
+        if (_reviewMode && (_reviewBackHandler?.call() ?? false)) {
+          return;
+        }
+        if (_reviewMode) {
+          _setReviewMode(false);
           return;
         }
         if (_backGuardActive) {
@@ -407,51 +437,51 @@ class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStat
               // Main Workspace Column
               Column(
                 children: [
-                  TopBar(
-                    controller: c,
-                    layout: layout,
-                    onOpenDrawer: () => _setDrawerOpen(true),
-                    onOpenTimelineSheet: () => _openTimelineSheet(context, c),
-                    onOpenAnnotationsSheet: () =>
-                        setState(() => _annotationSheetOpen = !_annotationSheetOpen),
-                    onOpenBranches: () => _openModalAware(
-                      context,
-                      _InlineModalType.branch,
-                      BranchModal(controller: c),
+                  if (!_reviewMode)
+                    TopBar(
+                      controller: c,
+                      layout: layout,
+                      onOpenDrawer: () => _setDrawerOpen(true),
+                      onOpenTimelineSheet: () => _openTimelineSheet(context, c),
+                      onOpenAnnotationsSheet: () => _setReviewMode(!_reviewMode),
+                      onOpenBranches: () => _openModalAware(
+                        context,
+                        _InlineModalType.branch,
+                        BranchModal(controller: c),
+                      ),
+                      onOpenPaperStudio: () => _openModalAware(
+                        context,
+                        _InlineModalType.paperStudio,
+                        PaperStudioModal(controller: c),
+                      ),
+                      onOpenContextAssets: () => _openModalAware(
+                        context,
+                        _InlineModalType.contextAssets,
+                        ContextAssetsModal(controller: c),
+                      ),
+                      onOpenEvolutionStudio: () => _openModalAware(
+                        context,
+                        _InlineModalType.evolutionStudio,
+                        EvolutionStudioModal(controller: c),
+                      ),
+                      onOpenCoverSplit: () {
+                        if (doc?.baseDocxBase64 != null) {
+                          _openModalAware(
+                            context,
+                            _InlineModalType.coverSplit,
+                            CoverSplitModal(controller: c),
+                          );
+                        }
+                      },
+                      onOpenSync: () => _openModalAware(
+                        context,
+                        _InlineModalType.sync,
+                        SyncModal(controller: c),
+                      ),
+                      onOpenSettings: () => _openSettings(context, c),
+                      onOpenCameraScan: () => _showGlassModal(context, CameraScanModal(controller: c)),
+                      onOpenShareIntake: () => _showGlassModal(context, ShareIntakeModal(controller: c)),
                     ),
-                    onOpenPaperStudio: () => _openModalAware(
-                      context,
-                      _InlineModalType.paperStudio,
-                      PaperStudioModal(controller: c),
-                    ),
-                    onOpenContextAssets: () => _openModalAware(
-                      context,
-                      _InlineModalType.contextAssets,
-                      ContextAssetsModal(controller: c),
-                    ),
-                    onOpenEvolutionStudio: () => _openModalAware(
-                      context,
-                      _InlineModalType.evolutionStudio,
-                      EvolutionStudioModal(controller: c),
-                    ),
-                    onOpenCoverSplit: () {
-                      if (doc?.baseDocxBase64 != null) {
-                        _openModalAware(
-                          context,
-                          _InlineModalType.coverSplit,
-                          CoverSplitModal(controller: c),
-                        );
-                      }
-                    },
-                    onOpenSync: () => _openModalAware(
-                      context,
-                      _InlineModalType.sync,
-                      SyncModal(controller: c),
-                    ),
-                    onOpenSettings: () => _openSettings(context, c),
-                    onOpenCameraScan: () => _showGlassModal(context, CameraScanModal(controller: c)),
-                    onOpenShareIntake: () => _showGlassModal(context, ShareIntakeModal(controller: c)),
-                  ),
 
                   // Main Content Area
                   Expanded(
@@ -461,7 +491,7 @@ class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStat
                   ),
 
                   // Compact Bottom Quick Format Bar (with bottom safe area inset)
-                  if (layout.isCompact && doc != null)
+                  if (layout.isCompact && doc != null && !_reviewMode)
                     SafeArea(
                       top: false,
                       child: MobileQuickFormatBar(
@@ -489,8 +519,7 @@ class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStat
                           c.toggleSplitPreview();
                           c.notifyTutorialAction(TutorialActionId.togglePreview);
                         },
-                        onOpenAnnotations: () =>
-                            setState(() => _annotationSheetOpen = !_annotationSheetOpen),
+                        onOpenAnnotations: () => _setReviewMode(true),
                         onTogglePhrasebank: () => _openModalAware(
                           context,
                           _InlineModalType.phrasebank,
@@ -509,26 +538,27 @@ class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStat
               ),
 
               // Draggable Edge-Snapping Phrasebank Capsule
-              PhrasebankFloatingCapsule(
-                controller: c,
-                onOpenModal: () => _openModalAware(
-                  context,
-                  _InlineModalType.phrasebank,
-                  PhrasebankModalSheet(controller: c),
-                ),
-              ),
-
-              // Compact Mobile Annotation Half-Sheet
-              if (layout.isCompact && _annotationSheetOpen)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: layout.bottomPadding + 56,
-                  child: MobileAnnotationSheet(
-                    controller: c,
-                    onClose: () => setState(() => _annotationSheetOpen = false),
+              if (!_reviewMode)
+                PhrasebankFloatingCapsule(
+                  controller: c,
+                  onOpenModal: () => _openModalAware(
+                    context,
+                    _InlineModalType.phrasebank,
+                    PhrasebankModalSheet(controller: c),
                   ),
                 ),
+
+              // Floating Review Mode Top-Right Orb & Menu
+              if (_reviewMode) ...[
+                if (_reviewOrbMenuOpen)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: () => setState(() => _reviewOrbMenuOpen = false),
+                    ),
+                  ),
+                _buildReviewOrbOverlay(c, layout, t),
+              ],
 
               // Left Drawer Backdrop + Panel (Phone & Tablet Portrait) with slide+fade animation
               if (layout.isCompact)
@@ -853,10 +883,185 @@ class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStat
     );
   }
 
+  Widget _buildReviewOrbOverlay(
+    AppController c,
+    DeviceLayoutInfo layout,
+    ArcThemeTokens t,
+  ) {
+    final d = ArcStrings.of(c.settings.locale);
+    final openCount = c.activeDoc?.annotations
+            .where((a) => a.status == AnnotationStatus.open)
+            .length ??
+        0;
+
+    return Positioned(
+      top: layout.topPadding + 10,
+      right: layout.isCompact ? 0 : 12,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Semantics(
+            label: d.reviewModeMenu,
+            button: true,
+            child: InkWell(
+              borderRadius: layout.isCompact
+                  ? const BorderRadius.horizontal(left: Radius.circular(999))
+                  : BorderRadius.circular(999),
+              onTap: () {
+                c.triggerHaptic(HapticPattern.light);
+                setState(() => _reviewOrbMenuOpen = !_reviewOrbMenuOpen);
+              },
+              child: Container(
+                height: 36,
+                padding: EdgeInsets.only(
+                  left: 12,
+                  right: layout.isCompact ? 14 : 12,
+                ),
+                decoration: BoxDecoration(
+                  color: t.bgElevated.withValues(alpha: 0.92),
+                  borderRadius: layout.isCompact
+                      ? const BorderRadius.horizontal(left: Radius.circular(999))
+                      : BorderRadius.circular(999),
+                  border: Border.all(color: t.borderStrong),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: t.isDark ? 0.35 : 0.14),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (layout.isCompact)
+                      Icon(LucideIcons.menu, size: 16, color: t.textPrimary)
+                    else ...[
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: t.accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      Text(
+                        d.reviewShort,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: t.textPrimary,
+                        ),
+                      ),
+                      if (openCount > 0) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: t.accent,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '$openCount',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: t.accentText,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (_reviewOrbMenuOpen) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: EdgeInsets.only(right: layout.isCompact ? 10 : 0),
+              child: SizedBox(
+                width: 176,
+                child: ArcSurface(
+                  borderRadius: 14,
+                  borderColor: t.borderStrong,
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FilledButton(
+                        onPressed: () {
+                          c.triggerHaptic(HapticPattern.medium);
+                          _setReviewMode(false);
+                        },
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 32),
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                        ),
+                        child: Text(
+                          d.exitReviewMode,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      OutlinedButton(
+                        onPressed: () {
+                          setState(() => _reviewOrbMenuOpen = false);
+                          c.saveMilestoneSnapshot();
+                        },
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 32),
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                        ),
+                        child: Text(
+                          d.snapshot,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      OutlinedButton(
+                        onPressed: () {
+                          setState(() => _reviewOrbMenuOpen = false);
+                          _openSettings(context, c);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 32),
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                        ),
+                        child: Text(
+                          d.settings,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildCompactBody(AppController c, DeviceLayoutInfo layout, ArcThemeTokens t) {
     return EditorWorkspace(
       controller: c,
       isCompact: true,
+      reviewMode: _reviewMode,
+      onSetReviewMode: _setReviewMode,
+      onRegisterReviewBackHandler: (fn) => _reviewBackHandler = fn,
+      onRegisterExitReviewGuard: (fn) => _exitReviewGuard = fn,
+      onSaveMilestone: c.saveMilestoneSnapshot,
+      onOpenCameraScan: () => _showGlassModal(context, CameraScanModal(controller: c)),
+      quickFormatScrollController: _quickFormatScroll,
       onOpenCoverSplit: () => _openModalAware(
         context,
         _InlineModalType.coverSplit,
@@ -868,11 +1073,36 @@ class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStat
         _InlineModalType.phrasebank,
         PhrasebankModalSheet(controller: c),
       ),
-      onTapHighlightedAnnotation: (_) => setState(() => _annotationSheetOpen = true),
+      onTapHighlightedAnnotation: (_) {},
     );
   }
 
   Widget _buildTabletLandscapeBody(AppController c, DeviceLayoutInfo layout, ArcThemeTokens t) {
+    if (_reviewMode) {
+      return EditorWorkspace(
+        controller: c,
+        isCompact: false,
+        reviewMode: true,
+        onSetReviewMode: _setReviewMode,
+        onRegisterReviewBackHandler: (fn) => _reviewBackHandler = fn,
+        onRegisterExitReviewGuard: (fn) => _exitReviewGuard = fn,
+        onSaveMilestone: c.saveMilestoneSnapshot,
+        onOpenCameraScan: () => _showGlassModal(context, CameraScanModal(controller: c)),
+        onOpenCoverSplit: () => _openModalAware(
+          context,
+          _InlineModalType.coverSplit,
+          CoverSplitModal(controller: c),
+        ),
+        onOpenSkillsSettings: () => _openSettings(context, c, initialTab: SettingsTab.ai),
+        onTogglePhrasebank: () => _openModalAware(
+          context,
+          _InlineModalType.phrasebank,
+          PhrasebankModalSheet(controller: c),
+        ),
+        onTapHighlightedAnnotation: (_) {},
+      );
+    }
+
     final doc = c.activeDoc;
     final hasSelectedAnn =
         c.selectedAnnotationId != null && (doc?.annotations.isNotEmpty ?? false);
@@ -921,6 +1151,7 @@ class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStat
                     child: EditorWorkspace(
                       controller: c,
                       isCompact: false,
+                      onSetReviewMode: _setReviewMode,
                       onOpenCoverSplit: () => _openModalAware(
                         context,
                         _InlineModalType.coverSplit,
@@ -944,7 +1175,10 @@ class _WorkspaceShellState extends State<WorkspaceShell> with TickerProviderStat
                   ),
                   SizedBox(
                     width: _rightSidebarWidth,
-                    child: AnnotationSidebar(controller: c),
+                    child: AnnotationSidebar(
+                      controller: c,
+                      onEnterReviewMode: () => _setReviewMode(true),
+                    ),
                   ),
                 ],
               ),

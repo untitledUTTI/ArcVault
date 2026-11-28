@@ -2739,15 +2739,15 @@ export function App() {
               triggerAppHaptic('light');
               setRevisionOrbMenuOpen((v) => !v);
             }}
-            aria-label={settings.locale === 'zh-CN' ? '修订模式菜单' : 'Revision Mode Menu'}
-            title={settings.locale === 'zh-CN' ? '修订模式菜单' : 'Revision Mode Menu'}
+            aria-label={settings.locale === 'zh-CN' ? '审阅模式菜单' : 'Review Mode Menu'}
+            title={settings.locale === 'zh-CN' ? '审阅模式菜单' : 'Review Mode Menu'}
           >
             {deviceEnv.isPhone || deviceEnv.isTabletPortrait ? (
               <Menu size={16} />
             ) : (
               <>
                 <span className="arc-orb-dot" />
-                <span>{settings.locale === 'zh-CN' ? '修订' : 'Rev'}</span>
+                <span>{settings.locale === 'zh-CN' ? '审阅' : 'Review'}</span>
                 {openAnnotationCount > 0 && (
                   <span className="arc-orb-badge">{openAnnotationCount}</span>
                 )}
@@ -2767,7 +2767,7 @@ export function App() {
                   setRevisionMode(false);
                 }}
               >
-                {settings.locale === 'zh-CN' ? '退出修订模式' : 'Exit Revision Mode'}
+                {settings.locale === 'zh-CN' ? '退出审阅模式' : 'Exit Review Mode'}
               </button>
               <button
                 type="button"

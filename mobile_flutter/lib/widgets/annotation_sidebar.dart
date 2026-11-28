@@ -8,9 +8,14 @@ import '../state/app_controller.dart';
 import '../theme/arc_theme.dart';
 
 class AnnotationSidebar extends StatefulWidget {
-  const AnnotationSidebar({super.key, required this.controller});
+  const AnnotationSidebar({
+    super.key,
+    required this.controller,
+    this.onEnterReviewMode,
+  });
 
   final AppController controller;
+  final VoidCallback? onEnterReviewMode;
 
   @override
   State<AnnotationSidebar> createState() => _AnnotationSidebarState();
@@ -73,6 +78,34 @@ class _AnnotationSidebarState extends State<AnnotationSidebar> {
                     ),
                   ),
                 ),
+                if (widget.onEnterReviewMode != null)
+                  InkWell(
+                    onTap: widget.onEnterReviewMode,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: t.accentSoft,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: t.accent.withValues(alpha: 0.35)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(LucideIcons.stickyNote, size: 12, color: t.accent),
+                          const SizedBox(width: 4),
+                          Text(
+                            d.reviewMode,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: t.accent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),

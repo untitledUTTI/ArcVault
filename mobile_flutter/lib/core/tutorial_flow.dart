@@ -411,7 +411,7 @@ class TutorialFlow {
     ),
     TutorialModuleDef(
       id: TutorialModuleId.wordAnnotations,
-      summary: '导入 .docx 时自动剥离封面排版，导出时原封不动拼回，配合平行批注卡片高效改稿。',
+      summary: '导入 .docx 时自动剥离封面排版，导出时原封不动拼回，配合分屏审阅模式与黑板便签高效改稿。',
       steps: [
         TutorialSpotlightStep(
           id: 'cover-pick-line',
@@ -455,12 +455,12 @@ class TutorialFlow {
         TutorialSpotlightStep(
           id: 'ann-open-card',
           moduleId: TutorialModuleId.wordAnnotations,
-          title: '第三步：切换查看平行批注与修订卡片',
+          title: '第三步：分屏审阅模式与黑板便签视图',
           description:
-              '导入带批注的 .docx 后，半屏批注抽屉（平板横屏为右侧平行批注栏）会按正文锚点位置自动对齐每条导师批注与修订。请在高亮区域点击「下一条/上一条」或任意批注卡片体验切换！',
+              '导入带批注的 .docx 后，点击标红/标蓝高亮仅定位选中；长按正文或点击「审阅」按钮即可进入分屏审阅模式（可拖动句柄调节比例），长按审阅区还可切换为黑板大头针便签视图！',
           bullets: [
             '蓝色标识为「批注」，红色标识为「修订建议（替换/插入/删除）」。',
-            '支持左右滑动批注抽屉快速切卡，点击正文高亮锚点也会自动定位对应批注。',
+            '黑板视图第一行为批注便签、第二行为修订便签，支持双指缩放与拖动画布，底部胶囊支持章节跳转与搜索。',
           ],
           scene: TutorialSceneId.annotations,
           targetIds: [
@@ -469,20 +469,16 @@ class TutorialFlow {
           ],
           preferredPlacement: SpotlightPlacement.top,
           padding: 6,
-          actionGate: TutorialActionGate(
-            actionId: TutorialActionId.selectAnnotation,
-            buttonLabel: '批注/修订卡片',
-          ),
         ),
         TutorialSpotlightStep(
           id: 'ann-actions',
           moduleId: TutorialModuleId.wordAnnotations,
-          title: '第四步：Arc-Link 连线与修订处理',
+          title: '第四步：修订处理、独立草稿与贴纸存档',
           description:
-              '批注卡片内集成了完整的审阅操作栏（平板横屏自动绘制连接正文的 Arc-Link 光学曲线），你可以自由点击体验后再继续：',
+              '在平行批注栏或分屏审阅区中，你可以直接处理批注与修订，未保存的草稿与段落修改也会绑定手帐贴纸存档：',
           bullets: [
-            '修订类卡片支持「接受修订 / 拒绝修订」，一键同步修改正文并支持撤销重做。',
-            '批注类卡片支持「标记已解决 / 回复」，也可点击「AI 修改建议」获取润色方案。',
+            '修订支持「采纳修订 / 拒绝修订」，一键同步修改正文并支持撤销重做；批注支持「标记解决 / 回复」与「AI 改写建议」。',
+            '切换便签时未保存草稿自动独立存档并绑定贴纸（支持 40 款手帐贴纸、自定义文字叠加与导入 PNG，最新存档在最下方）。',
           ],
           scene: TutorialSceneId.annotations,
           targetIds: [

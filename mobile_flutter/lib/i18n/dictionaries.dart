@@ -82,7 +82,13 @@ class ArcStrings {
   String get tutorialShort => isZh ? '使用教程（支持自选重播）' : 'Interactive Tutorial';
   String get syncLabel => isZh ? '跨端加密同步' : 'E2EE Sync';
   String get timelineSheet => isZh ? '版本穹顶时间轴 & Diff' : 'Arc Dome Timeline & Diff';
-  String get annotationsSheet => isZh ? '批注与修订卡片' : 'Annotations & Revisions';
+  String get annotationsSheet => isZh ? '批注与修订' : 'Annotations & Revisions';
+  String get reviewMode => isZh ? '审阅模式' : 'Review Mode';
+  String get reviewShort => isZh ? '审阅' : 'Review';
+  String get enterReviewMode => isZh ? '进入审阅模式' : 'Enter Review Mode';
+  String get exitReviewMode => isZh ? '退出审阅模式' : 'Exit Review Mode';
+  String get reviewModeMenu => isZh ? '审阅模式菜单' : 'Review Mode Menu';
+  String get reviewBoard => isZh ? '审阅黑板' : 'Review Board';
   String get cameraScan => isZh ? '拍照扫描入库' : 'Camera Scan Intake';
   String get shareIntake => isZh ? '系统分享 / 剪贴板入库' : 'System Share / Clipboard Intake';
   String get openMenu => isZh ? '打开档案列表' : 'Open Archive Drawer';

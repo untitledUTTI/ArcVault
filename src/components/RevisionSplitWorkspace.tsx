@@ -1318,7 +1318,7 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
           <strong style={{ fontSize: 13 }}>
             {isZh
               ? `批注与修订 (${filteredStats.open}/${filteredAnnotations.length})`
-              : `Revisions (${filteredStats.open}/${filteredAnnotations.length})`}
+              : `Review (${filteredStats.open}/${filteredAnnotations.length})`}
           </strong>
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
             {isZh ? '· 长按进入审阅黑板' : '· Long-press for Review Board'}

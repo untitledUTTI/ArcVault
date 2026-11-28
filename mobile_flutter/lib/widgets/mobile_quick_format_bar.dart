@@ -10,6 +10,7 @@ class MobileQuickFormatBar extends StatefulWidget {
     this.snapshotBtnKey,
     this.scrollController,
     required this.isZh,
+    this.inReviewMode = false,
     required this.readOnly,
     required this.activeFormat,
     required this.splitPreview,
@@ -35,6 +36,7 @@ class MobileQuickFormatBar extends StatefulWidget {
   final GlobalKey? snapshotBtnKey;
   final ScrollController? scrollController;
   final bool isZh;
+  final bool inReviewMode;
   final bool readOnly;
   final EditorFormat activeFormat;
   final bool splitPreview;
@@ -70,8 +72,10 @@ class _MobileQuickFormatBarState extends State<MobileQuickFormatBar> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxAvailable = (constraints.maxWidth - 20).clamp(220.0, double.infinity);
-        final barWidth = (maxAvailable * activeFraction).clamp(220.0, maxAvailable);
+        final maxAvailable = (constraints.maxWidth - 20).clamp(200.0, double.infinity);
+        final barWidth = widget.inReviewMode
+            ? maxAvailable.clamp(200.0, 440.0)
+            : (maxAvailable * activeFraction).clamp(220.0, maxAvailable);
 
         void handleEdgeDrag(double deltaPx) {
           final next = ((_dragFraction ?? widget.widthFraction) + deltaPx / maxAvailable)
@@ -89,31 +93,42 @@ class _MobileQuickFormatBarState extends State<MobileQuickFormatBar> {
         }
 
         return Padding(
-          padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+          padding: EdgeInsets.fromLTRB(
+            10,
+            widget.inReviewMode ? 2 : 4,
+            10,
+            widget.inReviewMode ? 6 : 8,
+          ),
           child: Center(
             child: SizedBox(
               width: barWidth,
               child: ArcSurface(
                 key: widget.barKey,
-                borderRadius: 24,
-                borderColor: _dragging ? t.accent : null,
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                borderRadius: widget.inReviewMode ? 999 : 24,
+                borderColor: _dragging
+                    ? t.accent
+                    : (widget.inReviewMode ? t.borderStrong : null),
+                padding: EdgeInsets.symmetric(
+                  horizontal: widget.inReviewMode ? 8 : 4,
+                  vertical: widget.inReviewMode ? 4 : 6,
+                ),
                 child: Row(
                   children: [
-                    _WidthDragHandle(
-                      color: _dragging ? t.accent : t.textMuted.withValues(alpha: 0.45),
-                      tooltip: widget.isZh ? '拖拽调节底栏宽度（双击恢复）' : 'Drag to resize (double-tap reset)',
-                      onDragStart: () {
-                        widget.onHaptic(HapticPattern.selection);
-                        setState(() => _dragging = true);
-                      },
-                      onDragDelta: (dx) => handleEdgeDrag(-dx * 2),
-                      onDragEnd: finishDrag,
-                      onDoubleTap: () {
-                        widget.onHaptic(HapticPattern.selection);
-                        widget.onWidthFractionChanged?.call(1.0);
-                      },
-                    ),
+                    if (!widget.inReviewMode)
+                      _WidthDragHandle(
+                        color: _dragging ? t.accent : t.textMuted.withValues(alpha: 0.45),
+                        tooltip: widget.isZh ? '拖拽调节底栏宽度（双击恢复）' : 'Drag to resize (double-tap reset)',
+                        onDragStart: () {
+                          widget.onHaptic(HapticPattern.selection);
+                          setState(() => _dragging = true);
+                        },
+                        onDragDelta: (dx) => handleEdgeDrag(-dx * 2),
+                        onDragEnd: finishDrag,
+                        onDoubleTap: () {
+                          widget.onHaptic(HapticPattern.selection);
+                          widget.onWidthFractionChanged?.call(1.0);
+                        },
+                      ),
                     Expanded(
                       child: SingleChildScrollView(
                         controller: widget.scrollController,
@@ -201,7 +216,10 @@ class _MobileQuickFormatBarState extends State<MobileQuickFormatBar> {
                             const SizedBox(width: 6),
                             _PillBtn(
                               icon: LucideIcons.messageSquare,
-                              label: widget.isZh ? '批注' : 'Notes',
+                              label: widget.inReviewMode
+                                  ? (widget.isZh ? '退出审阅' : 'Exit Review')
+                                  : (widget.isZh ? '审阅' : 'Review'),
+                              active: widget.inReviewMode,
                               badgeCount: widget.openAnnotationCount,
                               onTap: () {
                                 widget.onHaptic(HapticPattern.light);
@@ -244,20 +262,21 @@ class _MobileQuickFormatBarState extends State<MobileQuickFormatBar> {
                         ),
                       ),
                     ),
-                    _WidthDragHandle(
-                      color: _dragging ? t.accent : t.textMuted.withValues(alpha: 0.45),
-                      tooltip: widget.isZh ? '拖拽调节底栏宽度（双击恢复）' : 'Drag to resize (double-tap reset)',
-                      onDragStart: () {
-                        widget.onHaptic(HapticPattern.selection);
-                        setState(() => _dragging = true);
-                      },
-                      onDragDelta: (dx) => handleEdgeDrag(dx * 2),
-                      onDragEnd: finishDrag,
-                      onDoubleTap: () {
-                        widget.onHaptic(HapticPattern.selection);
-                        widget.onWidthFractionChanged?.call(1.0);
-                      },
-                    ),
+                    if (!widget.inReviewMode)
+                      _WidthDragHandle(
+                        color: _dragging ? t.accent : t.textMuted.withValues(alpha: 0.45),
+                        tooltip: widget.isZh ? '拖拽调节底栏宽度（双击恢复）' : 'Drag to resize (double-tap reset)',
+                        onDragStart: () {
+                          widget.onHaptic(HapticPattern.selection);
+                          setState(() => _dragging = true);
+                        },
+                        onDragDelta: (dx) => handleEdgeDrag(dx * 2),
+                        onDragEnd: finishDrag,
+                        onDoubleTap: () {
+                          widget.onHaptic(HapticPattern.selection);
+                          widget.onWidthFractionChanged?.call(1.0);
+                        },
+                      ),
                   ],
                 ),
               ),
