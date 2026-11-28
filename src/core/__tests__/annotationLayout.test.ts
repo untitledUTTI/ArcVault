@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   computeAlignedScrollTargets,
   computeParallelAnnotationLayout,
+  computeVisibleAnnotationWindow,
+  estimateOffscreenAnchorTop,
 } from '../annotationLayout';
 import type { AnnotationItem } from '../../types/archive';
 
@@ -216,5 +218,53 @@ describe('computeAlignedScrollTargets', () => {
     expect(res.shouldScrollAnnotation).toBe(true);
     // anchorScreenY = 350 - 150 = 200; card aligns at 1800 - 200 + 16 = 1616
     expect(res.annotationScrollTop).toBe(1616);
+  });
+});
+
+describe('computeVisibleAnnotationWindow & estimateOffscreenAnchorTop', () => {
+  it('virtualizes 1,000 placements to only viewport + overscan + pinned cards without duplicates', () => {
+    const anns = Array.from({ length: 1000 }, (_, i) => makeAnn(`a_${i}`, i * 20));
+    const placements = anns.map((ann, i) => ({
+      ann,
+      top: i * 70 + 8,
+      height: 60,
+    }));
+
+    const visible = computeVisibleAnnotationWindow({
+      placements,
+      scrollTop: 35000,
+      viewportHeight: 700,
+      overscanPx: 480,
+      pinnedIds: ['a_0', 'a_505', 'a_999'],
+    });
+
+    expect(visible.length).toBeLessThan(40);
+    expect(visible[0].ann.id).toBe('a_0');
+    expect(visible[visible.length - 1].ann.id).toBe('a_999');
+    expect(visible.some((p) => p.ann.id === 'a_505')).toBe(true);
+
+    // No duplicates
+    const ids = visible.map((p) => p.ann.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('estimates offscreen anchor top proportionally within document bounds', () => {
+    expect(
+      estimateOffscreenAnchorTop({
+        pos: 5000,
+        docLength: 10000,
+        contentTop: 40,
+        contentHeight: 4000,
+      }),
+    ).toBe(2040);
+
+    expect(
+      estimateOffscreenAnchorTop({
+        pos: 0,
+        docLength: 0,
+        contentTop: 24,
+        contentHeight: 500,
+      }),
+    ).toBe(24);
   });
 });

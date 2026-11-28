@@ -6,6 +6,7 @@ import type { CasObjectStore } from '../core/casStore';
 
 interface BranchModalProps {
   isZh?: boolean;
+  isTouch?: boolean;
   docTitle: string;
   currentBranchId: string;
   branches: Branch[];
@@ -21,6 +22,7 @@ interface BranchModalProps {
 
 export const BranchModal: React.FC<BranchModalProps> = ({
   isZh = true,
+  isTouch = false,
   docTitle,
   currentBranchId,
   branches,
@@ -300,7 +302,15 @@ export const BranchModal: React.FC<BranchModalProps> = ({
                 }}
               >
                 <Check size={14} />
-                <span>{isZh ? '确认合并到主线（支持 Ctrl+Z 撤销）' : 'Confirm Merge to Main (Ctrl+Z to undo)'}</span>
+                <span>
+                  {isTouch
+                    ? isZh
+                      ? '确认合并到主线（支持撤销）'
+                      : 'Confirm Merge to Main (Undoable)'
+                    : isZh
+                      ? '确认合并到主线（支持 Ctrl+Z 撤销）'
+                      : 'Confirm Merge to Main (Ctrl+Z to undo)'}
+                </span>
               </button>
             </>
           ) : (

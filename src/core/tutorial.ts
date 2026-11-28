@@ -116,6 +116,10 @@ export interface TutorialSpotlightStep {
   title: string;
   description: string;
   bullets?: string[];
+  /** Independent mobile/touch copy so phone & tablet never show desktop keyboard shortcuts */
+  mobileTitle?: string;
+  mobileDescription?: string;
+  mobileBullets?: string[];
   scene: TutorialSceneId;
   /** Ordered list of CSS selectors to resolve the spotlight target; empty = centered card over full dark mask */
   targetSelectors: string[];
@@ -125,8 +129,10 @@ export interface TutorialSpotlightStep {
   padding?: number;
   /** Preferred guide card placement relative to cutout */
   preferredPlacement?: 'auto' | 'top' | 'bottom' | 'left' | 'right';
-  /** When true, pin guide card to bottom of screen on phone viewports regardless of cutout space */
+  /** When true, pin guide card to bottom of screen on phone/tablet-portrait viewports regardless of cutout space */
   phoneForceBottom?: boolean;
+  /** When true, always pin guide card to bottom of screen across all viewports */
+  forceBottom?: boolean;
   /** When set, the Next button is disabled and shows "点击「xxx」按钮进入下一步/下一板块"; clicking the real element auto-advances */
   actionGate?: TutorialActionGate;
 }
@@ -229,6 +235,8 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         scene: 'trash-modal',
         targetSelectors: ['[data-tour="trash-modal"]'],
         preferredPlacement: 'bottom',
+        phoneForceBottom: true,
+        forceBottom: true,
         padding: 6,
       },
       {
@@ -240,6 +248,10 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         bullets: [
           '点击「MD / LaTeX」可在两种学术语法间无损互转编辑。',
           '电脑端支持拖动分栏边界与保存多套布局预设，手机端自动适配底部快捷格式条。',
+        ],
+        mobileBullets: [
+          '点击「MD / LaTeX」可在两种学术语法间无损互转编辑。',
+          '底部快捷格式条可一键切换双模与实时预览，触控操作无需外接键盘。',
         ],
         scene: 'workspace-format',
         targetSelectors: ['[data-tour="topbar-format-switch"]', '[data-tour="mobile-format-bar"]'],
@@ -278,6 +290,7 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         scene: 'cover-split',
         targetSelectors: ['[data-tour="cover-split-body"]'],
         preferredPlacement: 'right',
+        phoneForceBottom: true,
         padding: 4,
       },
       {
@@ -294,6 +307,7 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         scene: 'cover-split',
         targetSelectors: ['[data-tour="cover-split-footer"]'],
         preferredPlacement: 'top',
+        phoneForceBottom: true,
         padding: 6,
         actionGate: {
           triggerSelector: '[data-tour="cover-confirm-btn"]',
@@ -311,14 +325,16 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
           '蓝色标识为「批注」，红色标识为「修订建议」，点击正文高亮仅定位选中，长按文本即可呼出胶囊菜单进入修订模式。',
           '黑板视图第一行为批注便签、第二行为修订便签，支持上下左右滑动切签、双指缩放黑板，底部淡入胶囊支持快速切换章节与搜索。',
         ],
+        mobileDescription:
+          '导入带批注的 .docx 后，点击标红/标蓝高亮可定位选中；长按任意正文通过胶囊菜单「进入修订模式」即可开启分屏审阅（可拖动句柄调整比例），长按修订区还可切换为黑板大头针便签视图！',
+        mobileBullets: [
+          '蓝色标识为「批注」，红色标识为「修订建议」，长按正文呼出胶囊菜单进入分屏修订模式。',
+          '黑板视图第一行为批注便签、第二行为修订便签，支持滑动切签与双指缩放，底部胶囊支持章节跳转与搜索。',
+        ],
         scene: 'annotations',
         targetSelectors: ['[data-tour="annotation-sidebar"]'],
         preferredPlacement: 'left',
         padding: 6,
-        actionGate: {
-          triggerSelector: '[data-tour="annotation-card"], [data-tour="revision-split-pane"], [data-tour="revision-next-btn"]',
-          buttonLabel: '批注/修订项',
-        },
       },
       {
         id: 'ann-actions',
@@ -328,6 +344,10 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
           '在平行批注栏或分屏修订区中，你可以直接处理批注与修订，未保存的草稿也会与便签独立绑定并生成贴纸存档：',
         bullets: [
           '修订支持「采纳修订 / 拒绝修订」，一键同步修改正文并支持 Ctrl+Z 撤销；批注支持「标记解决 / 回复」与「AI 改写建议」。',
+          '切换便签时未保存的草稿自动独立保存并绑定贴纸显示在黑板下方（支持自定义贴纸与导入 PNG，最新存档始终在贴纸列最下方，点击贴纸即可回到上次存档）。',
+        ],
+        mobileBullets: [
+          '修订支持「采纳修订 / 拒绝修订」，一键同步修改正文并可通过顶部「撤销」按钮撤回；批注支持「标记解决 / 回复」与「AI 改写建议」。',
           '切换便签时未保存的草稿自动独立保存并绑定贴纸显示在黑板下方（支持自定义贴纸与导入 PNG，最新存档始终在贴纸列最下方，点击贴纸即可回到上次存档）。',
         ],
         scene: 'annotations',
@@ -355,6 +375,8 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         title: '一键打里程碑快照（CAS 哈希去重）',
         description:
           '点击顶栏高亮的「快照」按钮（快捷键 Ctrl/Cmd + S），系统会对当前正文计算内容哈希：若有改动则生成增量版本节点；若正文完全未改动则自动命中去重，0 字节冗余写入！请点击「快照」按钮体验：',
+        mobileDescription:
+          '点击顶栏高亮的「快照」按钮，系统会对当前正文计算内容哈希：若有改动则生成增量版本节点；若正文完全未改动则自动命中去重，0 字节冗余写入！请点击「快照」按钮体验：',
         scene: 'snapshot-topbar',
         targetSelectors: ['[data-tour="topbar-snapshot-btn"]'],
         preferredPlacement: 'bottom',
@@ -399,6 +421,8 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         scene: 'diff-darlings',
         targetSelectors: ['[data-tour="diff-modal"]'],
         preferredPlacement: 'bottom',
+        phoneForceBottom: true,
+        forceBottom: true,
         padding: 6,
       },
       {
@@ -410,6 +434,8 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         scene: 'branch-modal',
         targetSelectors: ['[data-tour="branch-modal"]'],
         preferredPlacement: 'bottom',
+        phoneForceBottom: true,
+        forceBottom: true,
         padding: 6,
       },
     ],
@@ -448,6 +474,9 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         title: '学术写作句库悬浮胶囊（Alt+P / ⌥P）',
         description:
           '已为你呼出悬浮学术句库胶囊！你可以点击胶囊上的图标体验「智能辅助、章节导航、上下文分析、快速查词、段落骨架」等工具，点选句式即可直接插入光标处；桌面端还可拖拽悬浮条调整位置。',
+        mobileTitle: '学术写作句库面板',
+        mobileDescription:
+          '已为你呼出学术写作句库！在手机与平板竖屏下，点击右下角悬浮按钮或底部快捷条即可随时打开，体验「智能辅助、章节导航、上下文分析、快速查词、段落骨架」等工具，并支持拖动顶部句柄调节面板高度。',
         scene: 'phrasebank-capsule',
         targetSelectors: ['[data-tour="phrasebank-capsule"]'],
         unionSelectors: ['[data-tour="phrasebank-capsule"]', '[data-tour="phrasebank-panel"]'],
@@ -571,6 +600,8 @@ export const TUTORIAL_MODULES: TutorialModuleDef[] = [
         title: '无损交付：带原封面与修订红线导出',
         description:
           '改稿定稿后，点击顶栏高亮的「导出」按钮（手机端在右上角「更多」菜单中），即可选择「导出 Word（原封面无损拼回）」「导出带修订红线对比版 .docx」，或直接导出纯文本 .md / .tex。',
+        mobileDescription:
+          '改稿定稿后，点击右上角「更多」菜单中的「导出」（平板横屏可直接点击顶栏「导出」），即可选择「导出 Word（原封面无损拼回）」「导出带修订红线对比版 .docx」，或直接导出纯文本 .md / .tex。',
         scene: 'export-topbar',
         targetSelectors: ['[data-tour="topbar-export-btn"]', '[data-tour="topbar-more-btn"]'],
         unionSelectors: [
@@ -726,6 +757,24 @@ export function getStepAdvanceRelation(
     return 'next-module';
   }
   return 'next-step';
+}
+
+export function resolveTutorialStepCopy(
+  step: TutorialSpotlightStep,
+  isMobile: boolean,
+): { title: string; description: string; bullets?: string[] } {
+  if (!isMobile) {
+    return {
+      title: step.title,
+      description: step.description,
+      bullets: step.bullets,
+    };
+  }
+  return {
+    title: step.mobileTitle ?? step.title,
+    description: step.mobileDescription ?? step.description,
+    bullets: step.mobileBullets ?? step.bullets,
+  };
 }
 
 export function formatActionGateButtonText(

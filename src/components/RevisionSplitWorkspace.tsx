@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Check,
   ChevronLeft,
@@ -7,6 +8,7 @@ import {
   GitPullRequestDraft,
   ImagePlus,
   Layers,
+  List,
   LocateFixed,
   MessageSquare,
   Palette,
@@ -21,6 +23,13 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { AiPrivacyBlockedError, generateAnnotationRewrite } from '../core/aiGateway';
+import {
+  DEFAULT_ANNOTATION_FILTER,
+  countAnnotationStats,
+  filterAnnotations,
+  isAnnotationFilterActive,
+  type AnnotationFilterState,
+} from '../core/annotationFilter';
 import {
   DEFAULT_REVISION_STICKERS,
   JOURNAL_STRIP_STICKERS,
@@ -72,6 +81,9 @@ interface RevisionSplitWorkspaceProps {
   onToggleResolveComment: (id: string) => void;
   onReplyComment: (id: string, text: string) => void;
   onApplyAiSuggestion: (id: string, rewrite: string) => void;
+  onBatchAcceptRevisions?: (targetIds?: string[]) => void;
+  onBatchRejectRevisions?: (targetIds?: string[]) => void;
+  onBatchResolveComments?: (targetIds?: string[]) => void;
   onHaptic: (pattern: HapticPattern) => void;
 }
 
@@ -97,6 +109,9 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
   onToggleResolveComment,
   onReplyComment,
   onApplyAiSuggestion,
+  onBatchAcceptRevisions,
+  onBatchRejectRevisions,
+  onBatchResolveComments,
   onHaptic,
 }) => {
   const isZh = settings.locale === 'zh-CN';
@@ -104,6 +119,8 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
   const [boardZoom, setBoardZoom] = useState(1);
   const [boardPan, setBoardPan] = useState({ x: 0, y: 0 });
   const [boardSearch, setBoardSearch] = useState('');
+  const [annFilter, setAnnFilter] = useState<AnnotationFilterState>(DEFAULT_ANNOTATION_FILTER);
+  const [showListOverview, setShowListOverview] = useState(false);
   const [activeSectionPos, setActiveSectionPos] = useState<number | null>(null);
 
   const [aiLoading, setAiLoading] = useState(false);
@@ -167,6 +184,8 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
     } catch {
       setDraftsByAnnId({});
     }
+    setAnnFilter(DEFAULT_ANNOTATION_FILTER);
+    setShowListOverview(false);
   }, [docId]);
 
   useEffect(() => {
@@ -177,11 +196,21 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
     }
   }, [draftsStorageKey, draftsByAnnId]);
 
+  const allStats = useMemo(() => countAnnotationStats(annotations), [annotations]);
+  const filteredAnnotations = useMemo(
+    () => filterAnnotations(annotations, annFilter),
+    [annotations, annFilter],
+  );
+  const filteredStats = useMemo(
+    () => countAnnotationStats(filteredAnnotations),
+    [filteredAnnotations],
+  );
+
   const ordered = useMemo(() => {
-    const openFirst = annotations.filter((a) => a.status === 'open');
-    const resolvedRest = annotations.filter((a) => a.status !== 'open');
+    const openFirst = filteredAnnotations.filter((a) => a.status === 'open');
+    const resolvedRest = filteredAnnotations.filter((a) => a.status !== 'open');
     return [...openFirst, ...resolvedRest];
-  }, [annotations]);
+  }, [filteredAnnotations]);
 
   const activeIdx = Math.max(
     0,
@@ -522,6 +551,18 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
     [filteredNotes],
   );
 
+  const renderBlackboardPortal = (node: React.ReactNode) =>
+    typeof document !== 'undefined' ? createPortal(node, document.body) : node;
+
+  const stopModalPropagation = {
+    onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => e.stopPropagation(),
+    onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => e.stopPropagation(),
+    onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => e.stopPropagation(),
+    onTouchStart: (e: React.TouchEvent<HTMLDivElement>) => e.stopPropagation(),
+    onTouchMove: (e: React.TouchEvent<HTMLDivElement>) => e.stopPropagation(),
+    onTouchEnd: (e: React.TouchEvent<HTMLDivElement>) => e.stopPropagation(),
+  };
+
   if (blackboardMode) {
     const renderBoardNode = (ann: AnnotationItem, kind: 'comment' | 'revision', idx: number) => {
       const draft = draftsByAnnId[ann.id]?.text ?? '';
@@ -860,387 +901,405 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
         </div>
 
         {/* Sticker Library Modal (opened only via "贴纸库" button) */}
-        {stickerLibraryOpen && (
-          <div
-            className="arc-bb-modal-backdrop"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => setStickerLibraryOpen(false)}
-          >
-            <div className="arc-bb-modal is-wide" onClick={(e) => e.stopPropagation()}>
-              {(() => {
-                const selectedStk =
-                  allStickers.find((s) => s.id === librarySelectedStickerId) ??
-                  allStickers[0] ??
-                  JOURNAL_STRIP_STICKERS[0];
-                return (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <strong style={{ fontSize: 14, color: '#f8fafc' }}>
-                        {isZh ? '贴纸库（手帐贴纸 & 文字叠加）' : 'Sticker Library & Text Overlay'}
-                      </strong>
-                      <button type="button" className="arc-bb-icon-btn" onClick={() => setStickerLibraryOpen(false)}>
-                        <X size={13} />
-                      </button>
-                    </div>
-
-                    <StickerPickerTabs
-                      allStickers={allStickers}
-                      selectedStickerId={selectedStk.id}
-                      activeTab={libraryTab}
-                      onTabChange={setLibraryTab}
-                      onSelect={(stk) => {
-                        onHaptic('selection');
-                        setLibrarySelectedStickerId(stk.id);
-                        setLibraryTextStyle((prev) => {
-                          if (stk.defaultTextStyle) {
-                            return {
-                              ...stk.defaultTextStyle,
-                              text: prev.text || stk.defaultTextStyle.text,
-                            };
-                          }
-                          if (libraryUserTouchedColor) return prev;
-                          return {
-                            ...prev,
-                            color: stk.defaultTextColor ?? prev.color,
-                            strokeColor: stk.defaultStrokeColor ?? prev.strokeColor,
-                          };
-                        });
-                      }}
-                      onDeleteCustomSticker={onDeleteCustomSticker}
-                      isZh={isZh}
-                      surface="dark"
-                    />
-
-                    {/* WYSIWYG Preview Stage */}
-                    <div className="arc-sticker-preview-stage">
-                      <StickerVisual
-                        sticker={selectedStk}
-                        textStyle={libraryTextStyle}
-                        mode="preview"
-                        isZh={isZh}
-                      />
-                    </div>
-
-                    {/* Text Overlay Customizer */}
-                    <StickerTextStyleControls
-                      value={libraryTextStyle}
-                      onChange={setLibraryTextStyle}
-                      onColorTouched={() => setLibraryUserTouchedColor(true)}
-                      isZh={isZh}
-                      surface="dark"
-                      draftFallbackText={currentDraftText}
-                    />
-
-                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 }}>
-                      <button
-                        type="button"
-                        className="arc-bb-icon-btn"
-                        onClick={() => {
-                          const newId = `stk-custom-txt-${Date.now()}`;
-                          onAddCustomSticker({
-                            id: newId,
-                            label: libraryTextStyle.text.trim().slice(0, 10) || selectedStk.label,
-                            labelEn: libraryTextStyle.text.trim().slice(0, 14) || selectedStk.labelEn,
-                            emoji: selectedStk.emoji,
-                            color: selectedStk.color,
-                            category: 'custom',
-                            pngUrl: selectedStk.pngUrl,
-                            pngDataUrl: selectedStk.pngDataUrl,
-                            isStripImage: isStripImageSticker(selectedStk),
-                            textInset: selectedStk.textInset,
-                            defaultTextColor: libraryTextStyle.color,
-                            defaultStrokeColor: libraryTextStyle.strokeColor,
-                            defaultTextStyle: { ...libraryTextStyle },
-                            isCustom: true,
-                          });
-                          setLibraryTab('custom');
-                          setLibrarySelectedStickerId(newId);
-                          onHaptic('success');
-                        }}
-                      >
-                        <Plus size={12} /> {isZh ? '保存为自定义贴纸' : 'Save as Custom'}
-                      </button>
-
-                      {current && (
-                        <button
-                          type="button"
-                          className="arc-bb-primary-btn"
-                          onClick={() => {
-                            onAddArchiveSticker({
-                              id: `arcstk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                              annId: current.id,
-                              stickerId: selectedStk.id,
-                              draftText:
-                                libraryTextStyle.text.trim() ||
-                                currentDraftText.trim() ||
-                                current.originalText.slice(0, 24) ||
-                                current.author,
-                              snippet: current.originalText.slice(0, 24) || current.author,
-                              savedAt: Date.now(),
-                              textOverlay: { ...libraryTextStyle },
-                            });
-                            onHaptic('success');
-                            setStickerLibraryOpen(false);
-                          }}
-                        >
-                          {isZh ? '贴到当前便签' : 'Attach to Note'}
+        {stickerLibraryOpen &&
+          renderBlackboardPortal(
+            <div
+              className="arc-bb-modal-backdrop"
+              {...stopModalPropagation}
+              onClick={() => setStickerLibraryOpen(false)}
+            >
+              <div className="arc-bb-modal is-wide is-sheet-scroll" onClick={(e) => e.stopPropagation()}>
+                {(() => {
+                  const selectedStk =
+                    allStickers.find((s) => s.id === librarySelectedStickerId) ??
+                    allStickers[0] ??
+                    JOURNAL_STRIP_STICKERS[0];
+                  return (
+                    <>
+                      <div className="arc-bb-modal-header">
+                        <strong style={{ fontSize: 14, color: '#f8fafc' }}>
+                          {isZh ? '贴纸库（手帐贴纸 & 文字叠加）' : 'Sticker Library & Text Overlay'}
+                        </strong>
+                        <button type="button" className="arc-bb-icon-btn" onClick={() => setStickerLibraryOpen(false)}>
+                          <X size={13} />
                         </button>
-                      )}
-                    </div>
+                      </div>
 
-                    {libraryTab === 'custom' && (
-                      <div className="arc-custom-sticker-form">
-                        <input
-                          type="text"
-                          className="arc-input"
-                          style={{ height: 28, fontSize: 12, flex: 1, minWidth: 90 }}
-                          placeholder={isZh ? '新建贴纸名称' : 'New sticker name'}
-                          value={customStickerName}
-                          onChange={(e) => setCustomStickerName(e.target.value)}
+                      <div className="arc-bb-modal-scroll">
+                        <StickerPickerTabs
+                          allStickers={allStickers}
+                          selectedStickerId={selectedStk.id}
+                          activeTab={libraryTab}
+                          onTabChange={setLibraryTab}
+                          onSelect={(stk) => {
+                            onHaptic('selection');
+                            setLibrarySelectedStickerId(stk.id);
+                            setLibraryTextStyle((prev) => {
+                              if (stk.defaultTextStyle) {
+                                return {
+                                  ...stk.defaultTextStyle,
+                                  text: prev.text || stk.defaultTextStyle.text,
+                                };
+                              }
+                              if (libraryUserTouchedColor) return prev;
+                              return {
+                                ...prev,
+                                color: stk.defaultTextColor ?? prev.color,
+                                strokeColor: stk.defaultStrokeColor ?? prev.strokeColor,
+                              };
+                            });
+                          }}
+                          onDeleteCustomSticker={onDeleteCustomSticker}
+                          isZh={isZh}
+                          surface="dark"
                         />
-                        <input
-                          type="text"
-                          className="arc-input"
-                          style={{ height: 28, fontSize: 12, width: 44, textAlign: 'center' }}
-                          value={customStickerEmoji}
-                          onChange={(e) => setCustomStickerEmoji(e.target.value)}
+
+                        {/* WYSIWYG Preview Stage */}
+                        <div className="arc-sticker-preview-stage">
+                          <StickerVisual
+                            sticker={selectedStk}
+                            textStyle={libraryTextStyle}
+                            mode="preview"
+                            isZh={isZh}
+                          />
+                        </div>
+
+                        {/* Text Overlay Customizer */}
+                        <StickerTextStyleControls
+                          value={libraryTextStyle}
+                          onChange={setLibraryTextStyle}
+                          onColorTouched={() => setLibraryUserTouchedColor(true)}
+                          isZh={isZh}
+                          surface="dark"
+                          compact
+                          draftFallbackText={currentDraftText}
                         />
-                        <input
-                          type="color"
-                          value={customStickerColor}
-                          onChange={(e) => setCustomStickerColor(e.target.value)}
-                          style={{ width: 28, height: 28, border: 'none', background: 'transparent' }}
-                        />
+
+                        {libraryTab === 'custom' && (
+                          <div className="arc-custom-sticker-form">
+                            <input
+                              type="text"
+                              className="arc-input"
+                              style={{ height: 28, fontSize: 12, flex: 1, minWidth: 90 }}
+                              placeholder={isZh ? '新建贴纸名称' : 'New sticker name'}
+                              value={customStickerName}
+                              onChange={(e) => setCustomStickerName(e.target.value)}
+                            />
+                            <input
+                              type="text"
+                              className="arc-input"
+                              style={{ height: 28, fontSize: 12, width: 44, textAlign: 'center' }}
+                              value={customStickerEmoji}
+                              onChange={(e) => setCustomStickerEmoji(e.target.value)}
+                            />
+                            <input
+                              type="color"
+                              value={customStickerColor}
+                              onChange={(e) => setCustomStickerColor(e.target.value)}
+                              style={{ width: 28, height: 28, border: 'none', background: 'transparent' }}
+                            />
+                            <button
+                              type="button"
+                              className="arc-bb-primary-btn"
+                              onClick={() => {
+                                const newId = `stk-custom-${Date.now()}`;
+                                onAddCustomSticker({
+                                  id: newId,
+                                  label: customStickerName.trim() || (isZh ? '自定义' : 'Custom'),
+                                  emoji: customStickerEmoji || '🏷️',
+                                  color: customStickerColor,
+                                  category: 'custom',
+                                  isCustom: true,
+                                });
+                                setCustomStickerName('');
+                                setLibrarySelectedStickerId(newId);
+                                onHaptic('success');
+                              }}
+                            >
+                              <Plus size={12} /> {isZh ? '添加' : 'Add'}
+                            </button>
+                            <button type="button" className="arc-bb-icon-btn" onClick={() => pngInputRef.current?.click()}>
+                              <ImagePlus size={12} /> {isZh ? '导入 PNG' : 'PNG'}
+                            </button>
+                            <input
+                              ref={pngInputRef}
+                              type="file"
+                              accept="image/png"
+                              style={{ display: 'none' }}
+                              onChange={handleImportStickerPng}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="arc-bb-modal-footer">
                         <button
                           type="button"
-                          className="arc-bb-primary-btn"
+                          className="arc-bb-icon-btn"
                           onClick={() => {
-                            const newId = `stk-custom-${Date.now()}`;
+                            const newId = `stk-custom-txt-${Date.now()}`;
                             onAddCustomSticker({
                               id: newId,
-                              label: customStickerName.trim() || (isZh ? '自定义' : 'Custom'),
-                              emoji: customStickerEmoji || '🏷️',
-                              color: customStickerColor,
+                              label: libraryTextStyle.text.trim().slice(0, 10) || selectedStk.label,
+                              labelEn: libraryTextStyle.text.trim().slice(0, 14) || selectedStk.labelEn,
+                              emoji: selectedStk.emoji,
+                              color: selectedStk.color,
                               category: 'custom',
+                              pngUrl: selectedStk.pngUrl,
+                              pngDataUrl: selectedStk.pngDataUrl,
+                              isStripImage: isStripImageSticker(selectedStk),
+                              textInset: selectedStk.textInset,
+                              defaultTextColor: libraryTextStyle.color,
+                              defaultStrokeColor: libraryTextStyle.strokeColor,
+                              defaultTextStyle: { ...libraryTextStyle },
                               isCustom: true,
                             });
-                            setCustomStickerName('');
+                            setLibraryTab('custom');
                             setLibrarySelectedStickerId(newId);
                             onHaptic('success');
                           }}
                         >
-                          <Plus size={12} /> {isZh ? '添加' : 'Add'}
+                          <Plus size={12} /> {isZh ? '保存为自定义贴纸' : 'Save as Custom'}
                         </button>
-                        <button type="button" className="arc-bb-icon-btn" onClick={() => pngInputRef.current?.click()}>
-                          <ImagePlus size={12} /> {isZh ? '导入 PNG' : 'PNG'}
-                        </button>
-                        <input
-                          ref={pngInputRef}
-                          type="file"
-                          accept="image/png"
-                          style={{ display: 'none' }}
-                          onChange={handleImportStickerPng}
-                        />
+
+                        {current && (
+                          <button
+                            type="button"
+                            className="arc-bb-primary-btn"
+                            onClick={() => {
+                              onAddArchiveSticker({
+                                id: `arcstk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                                annId: current.id,
+                                stickerId: selectedStk.id,
+                                draftText:
+                                  libraryTextStyle.text.trim() ||
+                                  currentDraftText.trim() ||
+                                  current.originalText.slice(0, 24) ||
+                                  current.author,
+                                snippet: current.originalText.slice(0, 24) || current.author,
+                                savedAt: Date.now(),
+                                textOverlay: { ...libraryTextStyle },
+                              });
+                              onHaptic('success');
+                              setStickerLibraryOpen(false);
+                            }}
+                          >
+                            {isZh ? '贴到当前便签' : 'Attach to Note'}
+                          </button>
+                        )}
                       </div>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        )}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>,
+          )}
 
         {/* Click Sticker -> View Modified Content */}
-        {viewingStickerArchive && (
-          <div
-            className="arc-bb-modal-backdrop"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => setViewingStickerArchive(null)}
-          >
-            <div className="arc-bb-modal" onClick={(e) => e.stopPropagation()}>
-              {(() => {
-                const stk =
-                  allStickers.find((s) => s.id === viewingStickerArchive.stickerId) ??
-                  allStickers[0] ??
-                  DEFAULT_REVISION_STICKERS[0];
-                const effectiveStyle = getEffectiveStickerTextStyle(stk, viewingStickerArchive);
-                return (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {stk.pngDataUrl || stk.pngUrl ? (
-                          <img
-                            src={stk.pngDataUrl || stk.pngUrl}
-                            alt={stk.label}
-                            style={{ width: 32, height: 20, objectFit: 'contain' }}
-                          />
-                        ) : (
-                          <span style={{ fontSize: 18 }}>{stk.emoji}</span>
+        {viewingStickerArchive &&
+          renderBlackboardPortal(
+            <div
+              className="arc-bb-modal-backdrop"
+              {...stopModalPropagation}
+              onClick={() => setViewingStickerArchive(null)}
+            >
+              <div className="arc-bb-modal is-sheet-scroll" onClick={(e) => e.stopPropagation()}>
+                {(() => {
+                  const stk =
+                    allStickers.find((s) => s.id === viewingStickerArchive.stickerId) ??
+                    allStickers[0] ??
+                    DEFAULT_REVISION_STICKERS[0];
+                  const effectiveStyle = getEffectiveStickerTextStyle(stk, viewingStickerArchive);
+                  return (
+                    <>
+                      <div className="arc-bb-modal-header">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {stk.pngDataUrl || stk.pngUrl ? (
+                            <img
+                              src={stk.pngDataUrl || stk.pngUrl}
+                              alt={stk.label}
+                              style={{ width: 32, height: 20, objectFit: 'contain' }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: 18 }}>{stk.emoji}</span>
+                          )}
+                          <strong style={{ fontSize: 13.5, color: '#f8fafc' }}>
+                            {isZh ? stk.label : stk.labelEn || stk.label}
+                          </strong>
+                        </div>
+                        <button type="button" className="arc-bb-icon-btn" onClick={() => setViewingStickerArchive(null)}>
+                          <X size={13} />
+                        </button>
+                      </div>
+                      <div className="arc-bb-modal-scroll">
+                        {isStripImageSticker(stk) && (
+                          <div className="arc-sticker-preview-stage">
+                            <StickerVisual
+                              sticker={stk}
+                              textStyle={effectiveStyle}
+                              fallbackText={viewingStickerArchive.draftText}
+                              mode="preview"
+                              isZh={isZh}
+                            />
+                          </div>
                         )}
-                        <strong style={{ fontSize: 13.5, color: '#f8fafc' }}>
-                          {isZh ? stk.label : stk.labelEn || stk.label}
-                        </strong>
+                        <div
+                          style={{
+                            fontSize: 11.5,
+                            color: 'rgba(248,250,252,0.68)',
+                            wordBreak: 'break-word',
+                            overflowWrap: 'anywhere',
+                          }}
+                        >
+                          {viewingStickerArchive.snippet} ·{' '}
+                          {new Date(viewingStickerArchive.savedAt).toLocaleString()}
+                        </div>
+                        <div className="arc-bb-modal-content">{viewingStickerArchive.draftText}</div>
                       </div>
-                      <button type="button" className="arc-bb-icon-btn" onClick={() => setViewingStickerArchive(null)}>
-                        <X size={13} />
-                      </button>
-                    </div>
-                    {isStripImageSticker(stk) && (
-                      <div className="arc-sticker-preview-stage">
-                        <StickerVisual
-                          sticker={stk}
-                          textStyle={effectiveStyle}
-                          fallbackText={viewingStickerArchive.draftText}
-                          mode="preview"
-                          isZh={isZh}
-                        />
+                      <div className="arc-bb-modal-footer">
+                        <button
+                          type="button"
+                          className="arc-bb-icon-btn"
+                          onClick={() => {
+                            const target = viewingStickerArchive;
+                            setViewingStickerArchive(null);
+                            openEditStickerModal(target);
+                          }}
+                        >
+                          <Palette size={12} /> {isZh ? '编辑贴纸' : 'Edit Sticker'}
+                        </button>
+                        <button
+                          type="button"
+                          className="arc-bb-icon-btn"
+                          onClick={() => setViewingStickerArchive(null)}
+                        >
+                          {isZh ? '关闭' : 'Close'}
+                        </button>
+                        <button
+                          type="button"
+                          className="arc-bb-primary-btn"
+                          onClick={() => {
+                            onHaptic('medium');
+                            updateCurrentDraft(viewingStickerArchive.annId, viewingStickerArchive.draftText);
+                            onSelect(viewingStickerArchive.annId);
+                            onLocate(viewingStickerArchive.annId);
+                            setViewingStickerArchive(null);
+                            setBlackboardMode(false);
+                          }}
+                        >
+                          {isZh ? '载入并定位' : 'Load & Locate'}
+                        </button>
                       </div>
-                    )}
-                    <div style={{ fontSize: 11.5, color: 'rgba(248,250,252,0.68)' }}>
-                      {viewingStickerArchive.snippet} ·{' '}
-                      {new Date(viewingStickerArchive.savedAt).toLocaleString()}
-                    </div>
-                    <div className="arc-bb-modal-content">{viewingStickerArchive.draftText}</div>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="arc-bb-icon-btn"
-                        onClick={() => {
-                          const target = viewingStickerArchive;
-                          setViewingStickerArchive(null);
-                          openEditStickerModal(target);
-                        }}
-                      >
-                        <Palette size={12} /> {isZh ? '编辑贴纸' : 'Edit Sticker'}
-                      </button>
-                      <button
-                        type="button"
-                        className="arc-bb-icon-btn"
-                        onClick={() => setViewingStickerArchive(null)}
-                      >
-                        {isZh ? '关闭' : 'Close'}
-                      </button>
-                      <button
-                        type="button"
-                        className="arc-bb-primary-btn"
-                        onClick={() => {
-                          onHaptic('medium');
-                          updateCurrentDraft(viewingStickerArchive.annId, viewingStickerArchive.draftText);
-                          onSelect(viewingStickerArchive.annId);
-                          onLocate(viewingStickerArchive.annId);
-                          setViewingStickerArchive(null);
-                          setBlackboardMode(false);
-                        }}
-                      >
-                        {isZh ? '载入并定位' : 'Load & Locate'}
-                      </button>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        )}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>,
+          )}
 
         {/* Long-press Sticker -> Edit Sticker Style, Text, Font, Stroke & Color */}
-        {editingStickerArchive && (
-          <div
-            className="arc-bb-modal-backdrop"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => setEditingStickerArchive(null)}
-          >
-            <div className="arc-bb-modal is-wide" onClick={(e) => e.stopPropagation()}>
-              {(() => {
-                const editStk =
-                  allStickers.find((s) => s.id === editStickerId) ??
-                  allStickers[0] ??
-                  DEFAULT_REVISION_STICKERS[0];
-                return (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <strong style={{ fontSize: 14, color: '#f8fafc' }}>
-                        {isZh ? '编辑黑板贴纸（样式与叠加文字）' : 'Edit Board Sticker'}
-                      </strong>
-                      <button type="button" className="arc-bb-icon-btn" onClick={() => setEditingStickerArchive(null)}>
-                        <X size={13} />
-                      </button>
-                    </div>
+        {editingStickerArchive &&
+          renderBlackboardPortal(
+            <div
+              className="arc-bb-modal-backdrop"
+              {...stopModalPropagation}
+              onClick={() => setEditingStickerArchive(null)}
+            >
+              <div className="arc-bb-modal is-wide is-sheet-scroll" onClick={(e) => e.stopPropagation()}>
+                {(() => {
+                  const editStk =
+                    allStickers.find((s) => s.id === editStickerId) ??
+                    allStickers[0] ??
+                    DEFAULT_REVISION_STICKERS[0];
+                  return (
+                    <>
+                      <div className="arc-bb-modal-header">
+                        <strong style={{ fontSize: 14, color: '#f8fafc' }}>
+                          {isZh ? '编辑黑板贴纸（样式与叠加文字）' : 'Edit Board Sticker'}
+                        </strong>
+                        <button type="button" className="arc-bb-icon-btn" onClick={() => setEditingStickerArchive(null)}>
+                          <X size={13} />
+                        </button>
+                      </div>
 
-                    <div className="arc-sticker-preview-stage">
-                      <StickerVisual
-                        sticker={editStk}
-                        textStyle={editTextStyle}
-                        fallbackText={editingStickerArchive.draftText}
-                        mode="preview"
-                        isZh={isZh}
-                      />
-                    </div>
+                      <div className="arc-bb-modal-scroll">
+                        <div className="arc-sticker-preview-stage">
+                          <StickerVisual
+                            sticker={editStk}
+                            textStyle={editTextStyle}
+                            fallbackText={editingStickerArchive.draftText}
+                            mode="preview"
+                            isZh={isZh}
+                          />
+                        </div>
 
-                    <StickerPickerTabs
-                      allStickers={allStickers}
-                      selectedStickerId={editStk.id}
-                      activeTab={editPickerTab}
-                      onTabChange={setEditPickerTab}
-                      onSelect={(stk) => {
-                        onHaptic('selection');
-                        setEditStickerId(stk.id);
-                        setEditTextStyle((prev) => {
-                          if (stk.defaultTextStyle) {
-                            return {
-                              ...stk.defaultTextStyle,
-                              text: prev.text || stk.defaultTextStyle.text,
-                            };
-                          }
-                          if (editUserTouchedColor) return prev;
-                          return {
-                            ...prev,
-                            color: stk.defaultTextColor ?? prev.color,
-                            strokeColor: stk.defaultStrokeColor ?? prev.strokeColor,
-                          };
-                        });
-                      }}
-                      isZh={isZh}
-                      surface="dark"
-                    />
+                        <StickerPickerTabs
+                          allStickers={allStickers}
+                          selectedStickerId={editStk.id}
+                          activeTab={editPickerTab}
+                          onTabChange={setEditPickerTab}
+                          onSelect={(stk) => {
+                            onHaptic('selection');
+                            setEditStickerId(stk.id);
+                            setEditTextStyle((prev) => {
+                              if (stk.defaultTextStyle) {
+                                return {
+                                  ...stk.defaultTextStyle,
+                                  text: prev.text || stk.defaultTextStyle.text,
+                                };
+                              }
+                              if (editUserTouchedColor) return prev;
+                              return {
+                                ...prev,
+                                color: stk.defaultTextColor ?? prev.color,
+                                strokeColor: stk.defaultStrokeColor ?? prev.strokeColor,
+                              };
+                            });
+                          }}
+                          isZh={isZh}
+                          surface="dark"
+                        />
 
-                    <StickerTextStyleControls
-                      value={editTextStyle}
-                      onChange={setEditTextStyle}
-                      onColorTouched={() => setEditUserTouchedColor(true)}
-                      draftFallbackText={editingStickerArchive.draftText}
-                      isZh={isZh}
-                      surface="dark"
-                    />
+                        <StickerTextStyleControls
+                          value={editTextStyle}
+                          onChange={setEditTextStyle}
+                          onColorTouched={() => setEditUserTouchedColor(true)}
+                          draftFallbackText={editingStickerArchive.draftText}
+                          isZh={isZh}
+                          surface="dark"
+                          compact
+                        />
+                      </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                      <button
-                        type="button"
-                        className="arc-bb-icon-btn"
-                        onClick={() => setEditingStickerArchive(null)}
-                      >
-                        {isZh ? '取消' : 'Cancel'}
-                      </button>
-                      <button
-                        type="button"
-                        className="arc-bb-primary-btn"
-                        onClick={() => {
-                          onHaptic('success');
-                          onUpdateArchiveSticker(editingStickerArchive.id, {
-                            stickerId: editStk.id,
-                            textOverlay: { ...editTextStyle },
-                          });
-                          setEditingStickerArchive(null);
-                        }}
-                      >
-                        <Check size={12} /> {isZh ? '保存修改' : 'Save Changes'}
-                      </button>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        )}
+                      <div className="arc-bb-modal-footer">
+                        <button
+                          type="button"
+                          className="arc-bb-icon-btn"
+                          onClick={() => setEditingStickerArchive(null)}
+                        >
+                          {isZh ? '取消' : 'Cancel'}
+                        </button>
+                        <button
+                          type="button"
+                          className="arc-bb-primary-btn"
+                          onClick={() => {
+                            onHaptic('success');
+                            onUpdateArchiveSticker(editingStickerArchive.id, {
+                              stickerId: editStk.id,
+                              textOverlay: { ...editTextStyle },
+                            });
+                            setEditingStickerArchive(null);
+                          }}
+                        >
+                          <Check size={12} /> {isZh ? '保存修改' : 'Save Changes'}
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>,
+          )}
       </div>
     );
   }
@@ -1258,8 +1317,8 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
           <strong style={{ fontSize: 13 }}>
             {isZh
-              ? `批注与修订 (${ordered.filter((a) => a.status === 'open').length}/${ordered.length})`
-              : `Revisions (${ordered.filter((a) => a.status === 'open').length}/${ordered.length})`}
+              ? `批注与修订 (${filteredStats.open}/${filteredAnnotations.length})`
+              : `Revisions (${filteredStats.open}/${filteredAnnotations.length})`}
           </strong>
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
             {isZh ? '· 长按进入审阅黑板' : '· Long-press for Review Board'}
@@ -1267,6 +1326,20 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {annotations.length > 0 && (
+            <button
+              type="button"
+              className={`arc-btn ${showListOverview ? 'arc-btn-primary' : ''}`}
+              style={{ height: 28, fontSize: 11.5, padding: '0 8px' }}
+              onClick={() => {
+                onHaptic('selection');
+                setShowListOverview((v) => !v);
+              }}
+            >
+              <List size={13} />
+              <span>{showListOverview ? (isZh ? '卡片' : 'Card') : (isZh ? '速览' : 'List')}</span>
+            </button>
+          )}
           {ordered.length > 1 && (
             <>
               <button
@@ -1308,10 +1381,174 @@ export const RevisionSplitWorkspace: React.FC<RevisionSplitWorkspaceProps> = ({
         </div>
       </div>
 
+      {annotations.length > 0 && (
+        <div className="arc-annotation-toolbar" style={{ padding: '6px 12px' }}>
+          <div className="arc-annotation-search">
+            <Search size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            <input
+              type="text"
+              value={annFilter.query}
+              onChange={(e) => setAnnFilter((p) => ({ ...p, query: e.target.value }))}
+              placeholder={isZh ? '搜索批注、原文或作者...' : 'Search notes, quotes, authors...'}
+            />
+            {annFilter.query && (
+              <button
+                type="button"
+                className="arc-ann-clear-btn"
+                onClick={() => setAnnFilter((p) => ({ ...p, query: '' }))}
+              >
+                <X size={11} />
+              </button>
+            )}
+            <span className="arc-badge" style={{ fontSize: 10 }}>
+              {filteredAnnotations.length}/{allStats.total}
+            </span>
+          </div>
+          <div className="arc-annotation-filter-row">
+            {(['all', 'open', 'handled'] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                className={`arc-ann-chip ${annFilter.status === st ? 'is-active' : ''}`}
+                onClick={() => setAnnFilter((p) => ({ ...p, status: st }))}
+              >
+                {st === 'all'
+                  ? `${isZh ? '全部' : 'All'} (${allStats.total})`
+                  : st === 'open'
+                    ? `${isZh ? '待处理' : 'Open'} (${allStats.open})`
+                    : `${isZh ? '已处理' : 'Handled'} (${allStats.handled})`}
+              </button>
+            ))}
+            <span className="arc-ann-chip-sep" aria-hidden="true" />
+            {(['all', 'comment', 'revision'] as const).map((tp) => (
+              <button
+                key={tp}
+                type="button"
+                className={`arc-ann-chip ${annFilter.type === tp ? 'is-active' : ''}`}
+                onClick={() => setAnnFilter((p) => ({ ...p, type: tp }))}
+              >
+                {tp === 'all'
+                  ? (isZh ? '全类型' : 'Any')
+                  : tp === 'comment'
+                    ? `${isZh ? '批注' : 'Comment'} (${allStats.comments})`
+                    : `${isZh ? '修订' : 'Revision'} (${allStats.revisions})`}
+              </button>
+            ))}
+          </div>
+          {!readOnly && (filteredStats.openRevisions > 0 || filteredStats.openComments > 0) && (
+            <div className="arc-annotation-batch-row">
+              {filteredStats.openRevisions > 0 && onBatchAcceptRevisions && (
+                <button
+                  type="button"
+                  className="arc-btn arc-btn-primary"
+                  style={{ height: 24, fontSize: 11, padding: '0 8px' }}
+                  onClick={() =>
+                    onBatchAcceptRevisions(
+                      filteredAnnotations
+                        .filter((a) => a.type === 'revision' && a.status === 'open')
+                        .map((a) => a.id),
+                    )
+                  }
+                >
+                  <Check size={11} />
+                  <span>{isZh ? `批量接受 (${filteredStats.openRevisions})` : `Accept (${filteredStats.openRevisions})`}</span>
+                </button>
+              )}
+              {filteredStats.openRevisions > 0 && onBatchRejectRevisions && (
+                <button
+                  type="button"
+                  className="arc-btn"
+                  style={{ height: 24, fontSize: 11, padding: '0 8px' }}
+                  onClick={() =>
+                    onBatchRejectRevisions(
+                      filteredAnnotations
+                        .filter((a) => a.type === 'revision' && a.status === 'open')
+                        .map((a) => a.id),
+                    )
+                  }
+                >
+                  <X size={11} />
+                  <span>{isZh ? `批量拒绝 (${filteredStats.openRevisions})` : `Reject (${filteredStats.openRevisions})`}</span>
+                </button>
+              )}
+              {filteredStats.openComments > 0 && onBatchResolveComments && (
+                <button
+                  type="button"
+                  className="arc-btn"
+                  style={{ height: 24, fontSize: 11, padding: '0 8px' }}
+                  onClick={() =>
+                    onBatchResolveComments(
+                      filteredAnnotations
+                        .filter((a) => a.type === 'comment' && a.status === 'open')
+                        .map((a) => a.id),
+                    )
+                  }
+                >
+                  <Check size={11} />
+                  <span>{isZh ? `批量解决 (${filteredStats.openComments})` : `Resolve (${filteredStats.openComments})`}</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="arc-revision-body">
         {!current ? (
           <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>
-            {isZh ? '当前文档暂无批注与修订' : 'No annotations or revisions'}
+            <div>
+              {annotations.length > 0 && isAnnotationFilterActive(annFilter)
+                ? (isZh ? '没有符合筛选条件的批注或修订' : 'No matching annotations or revisions')
+                : (isZh ? '当前文档暂无批注与修订' : 'No annotations or revisions')}
+            </div>
+            {annotations.length > 0 && isAnnotationFilterActive(annFilter) && (
+              <button
+                type="button"
+                className="arc-btn"
+                style={{ marginTop: 8, height: 26, fontSize: 11.5 }}
+                onClick={() => setAnnFilter(DEFAULT_ANNOTATION_FILTER)}
+              >
+                {isZh ? '重置筛选' : 'Reset Filters'}
+              </button>
+            )}
+          </div>
+        ) : showListOverview ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {ordered.map((ann, listIdx) => {
+              const isComment = ann.type === 'comment';
+              const isSel = ann.id === current.id;
+              return (
+                <button
+                  key={ann.id}
+                  type="button"
+                  className={`arc-mobile-ann-row ${isSel ? 'is-active' : ''}`}
+                  onClick={() => {
+                    switchToNote(ann.id);
+                    setShowListOverview(false);
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, width: '100%' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600, fontSize: 12 }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>#{listIdx + 1}</span>
+                      {isComment ? (
+                        <MessageSquare size={12} color="var(--arc-comment-color)" />
+                      ) : (
+                        <GitPullRequestDraft size={12} color="var(--arc-revision-color)" />
+                      )}
+                      {ann.author}
+                    </span>
+                    <span className="arc-badge" style={{ fontSize: 10 }}>
+                      {ann.status === 'open' ? (isZh ? '待处理' : 'Open') : ann.status}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'left', marginTop: 3 }}>
+                    {isComment
+                      ? ann.commentText || ann.originalText
+                      : `${ann.originalText} → ${ann.suggestedText || (isZh ? '(删除)' : '(delete)')}`}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         ) : (
           <div className="arc-revision-detail">

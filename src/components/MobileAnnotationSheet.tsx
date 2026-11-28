@@ -7,11 +7,19 @@ import {
   GitPullRequestDraft,
   MessageSquare,
   RotateCcw,
+  Search,
   Send,
   Sparkles,
   X,
 } from 'lucide-react';
 import { AiPrivacyBlockedError, generateAnnotationRewrite } from '../core/aiGateway';
+import {
+  DEFAULT_ANNOTATION_FILTER,
+  countAnnotationStats,
+  filterAnnotations,
+  isAnnotationFilterActive,
+  type AnnotationFilterState,
+} from '../core/annotationFilter';
 import { useAnimatedPresence } from '../platform/useAnimatedPresence';
 import type {
   AiPrivacyPolicy,
@@ -35,6 +43,9 @@ interface MobileAnnotationSheetProps {
   onToggleResolveComment: (id: string) => void;
   onReplyComment: (id: string, text: string) => void;
   onApplyAiSuggestion: (id: string, rewrite: string) => void;
+  onBatchAcceptRevisions?: (targetIds?: string[]) => void;
+  onBatchRejectRevisions?: (targetIds?: string[]) => void;
+  onBatchResolveComments?: (targetIds?: string[]) => void;
   onHaptic: (pattern: HapticPattern) => void;
   onClose: () => void;
 }
@@ -54,10 +65,14 @@ export const MobileAnnotationSheet: React.FC<MobileAnnotationSheetProps> = ({
   onToggleResolveComment,
   onReplyComment,
   onApplyAiSuggestion,
+  onBatchAcceptRevisions,
+  onBatchRejectRevisions,
+  onBatchResolveComments,
   onHaptic,
   onClose,
 }) => {
   const [showListMode, setShowListMode] = useState(false);
+  const [annFilter, setAnnFilter] = useState<AnnotationFilterState>(DEFAULT_ANNOTATION_FILTER);
   const [replyDraft, setReplyDraft] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiPreview, setAiPreview] = useState<{
@@ -69,11 +84,18 @@ export const MobileAnnotationSheet: React.FC<MobileAnnotationSheetProps> = ({
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const sheetPresence = useAnimatedPresence(open, 250);
 
+  const allStats = useMemo(() => countAnnotationStats(annotations), [annotations]);
+  const filtered = useMemo(
+    () => filterAnnotations(annotations, annFilter),
+    [annotations, annFilter],
+  );
+  const filteredStats = useMemo(() => countAnnotationStats(filtered), [filtered]);
+
   const ordered = useMemo(() => {
-    const openFirst = annotations.filter((a) => a.status === 'open');
-    const resolvedRest = annotations.filter((a) => a.status !== 'open');
+    const openFirst = filtered.filter((a) => a.status === 'open');
+    const resolvedRest = filtered.filter((a) => a.status !== 'open');
     return [...openFirst, ...resolvedRest];
-  }, [annotations]);
+  }, [filtered]);
 
   if (!sheetPresence.mounted) return null;
 
@@ -190,12 +212,161 @@ export const MobileAnnotationSheet: React.FC<MobileAnnotationSheetProps> = ({
           </div>
         </div>
 
+        {annotations.length > 0 && (
+          <div className="arc-annotation-toolbar" style={{ padding: '6px 14px' }}>
+            <div className="arc-annotation-search">
+              <Search size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+              <input
+                type="text"
+                value={annFilter.query}
+                onChange={(e) => setAnnFilter((p) => ({ ...p, query: e.target.value }))}
+                placeholder={
+                  settings.locale === 'zh-CN'
+                    ? '搜索批注、原文或作者...'
+                    : 'Search notes, quotes, authors...'
+                }
+              />
+              {annFilter.query && (
+                <button
+                  type="button"
+                  className="arc-ann-clear-btn"
+                  onClick={() => setAnnFilter((p) => ({ ...p, query: '' }))}
+                >
+                  <X size={12} />
+                </button>
+              )}
+              <span className="arc-badge" style={{ fontSize: 10.5 }}>
+                {ordered.length}/{allStats.total}
+              </span>
+            </div>
+            <div className="arc-annotation-filter-row">
+              {(['all', 'open', 'handled'] as const).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  className={`arc-ann-chip ${annFilter.status === st ? 'is-active' : ''}`}
+                  onClick={() => setAnnFilter((p) => ({ ...p, status: st }))}
+                >
+                  {st === 'all'
+                    ? `${settings.locale === 'zh-CN' ? '全部' : 'All'} (${allStats.total})`
+                    : st === 'open'
+                      ? `${settings.locale === 'zh-CN' ? '待处理' : 'Open'} (${allStats.open})`
+                      : `${settings.locale === 'zh-CN' ? '已处理' : 'Handled'} (${allStats.handled})`}
+                </button>
+              ))}
+              <span className="arc-ann-chip-sep" aria-hidden="true" />
+              {(['all', 'comment', 'revision'] as const).map((tp) => (
+                <button
+                  key={tp}
+                  type="button"
+                  className={`arc-ann-chip ${annFilter.type === tp ? 'is-active' : ''}`}
+                  onClick={() => setAnnFilter((p) => ({ ...p, type: tp }))}
+                >
+                  {tp === 'all'
+                    ? (settings.locale === 'zh-CN' ? '全类型' : 'Any')
+                    : tp === 'comment'
+                      ? `${settings.locale === 'zh-CN' ? '批注' : 'Comment'} (${allStats.comments})`
+                      : `${settings.locale === 'zh-CN' ? '修订' : 'Revision'} (${allStats.revisions})`}
+                </button>
+              ))}
+            </div>
+            {!readOnly && (filteredStats.openRevisions > 0 || filteredStats.openComments > 0) && (
+              <div className="arc-annotation-batch-row">
+                {filteredStats.openRevisions > 0 && onBatchAcceptRevisions && (
+                  <button
+                    type="button"
+                    className="arc-btn arc-btn-primary"
+                    style={{ height: 26, fontSize: 11, padding: '0 8px' }}
+                    onClick={() => {
+                      onHaptic('success');
+                      onBatchAcceptRevisions(
+                        filtered
+                          .filter((a) => a.type === 'revision' && a.status === 'open')
+                          .map((a) => a.id),
+                      );
+                    }}
+                  >
+                    <Check size={11} />
+                    <span>
+                      {settings.locale === 'zh-CN'
+                        ? `批量接受 (${filteredStats.openRevisions})`
+                        : `Accept (${filteredStats.openRevisions})`}
+                    </span>
+                  </button>
+                )}
+                {filteredStats.openRevisions > 0 && onBatchRejectRevisions && (
+                  <button
+                    type="button"
+                    className="arc-btn"
+                    style={{ height: 26, fontSize: 11, padding: '0 8px' }}
+                    onClick={() => {
+                      onHaptic('warning');
+                      onBatchRejectRevisions(
+                        filtered
+                          .filter((a) => a.type === 'revision' && a.status === 'open')
+                          .map((a) => a.id),
+                      );
+                    }}
+                  >
+                    <X size={11} />
+                    <span>
+                      {settings.locale === 'zh-CN'
+                        ? `批量拒绝 (${filteredStats.openRevisions})`
+                        : `Reject (${filteredStats.openRevisions})`}
+                    </span>
+                  </button>
+                )}
+                {filteredStats.openComments > 0 && onBatchResolveComments && (
+                  <button
+                    type="button"
+                    className="arc-btn"
+                    style={{ height: 26, fontSize: 11, padding: '0 8px' }}
+                    onClick={() => {
+                      onHaptic('success');
+                      onBatchResolveComments(
+                        filtered
+                          .filter((a) => a.type === 'comment' && a.status === 'open')
+                          .map((a) => a.id),
+                      );
+                    }}
+                  >
+                    <Check size={11} />
+                    <span>
+                      {settings.locale === 'zh-CN'
+                        ? `批量解决 (${filteredStats.openComments})`
+                        : `Resolve (${filteredStats.openComments})`}
+                    </span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="arc-sheet-body">
           {ordered.length === 0 ? (
             <div style={{ padding: 28, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-              {settings.locale === 'zh-CN'
-                ? '当前文档暂无批注或修订。导入包含导师批注/修订的 `.docx` 后，点击正文高亮即可在此快速审阅。'
-                : 'No comments or track-changes yet. Import a `.docx` with reviewer annotations to review them here.'}
+              {annotations.length > 0 && isAnnotationFilterActive(annFilter) ? (
+                <>
+                  <div>
+                    {settings.locale === 'zh-CN'
+                      ? '没有符合当前筛选或搜索条件的批注与修订。'
+                      : 'No matching annotations or revisions.'}
+                  </div>
+                  <button
+                    type="button"
+                    className="arc-btn"
+                    style={{ marginTop: 10, height: 30, fontSize: 12 }}
+                    onClick={() => setAnnFilter(DEFAULT_ANNOTATION_FILTER)}
+                  >
+                    {settings.locale === 'zh-CN' ? '重置筛选' : 'Reset Filters'}
+                  </button>
+                </>
+              ) : settings.locale === 'zh-CN' ? (
+                '当前文档暂无批注或修订。导入包含导师批注/修订的 `.docx` 后，点击正文高亮即可在此快速审阅。'
+              ) : (
+                'No comments or track-changes yet. Import a `.docx` with reviewer annotations to review them here.'
+              )}
             </div>
           ) : showListMode ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

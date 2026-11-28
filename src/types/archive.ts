@@ -335,9 +335,16 @@ export interface AutoBackupPolicy {
   minCharChangeThreshold: number;
 }
 
-export type UiFontPreset = 'system-sans' | 'pingfang' | 'serif' | 'rounded' | 'custom';
+export type UiFontPreset = 'system-sans' | 'noto-sans-sc' | 'pingfang' | 'serif' | 'rounded' | 'custom';
 
-export type EditorFontPreset = 'sans' | 'academic-serif' | 'wenkai' | 'mono' | 'custom';
+export type EditorFontPreset =
+  | 'sans'
+  | 'noto-sans-sc'
+  | 'academic-serif'
+  | 'wenkai'
+  | 'xiaowei'
+  | 'mono'
+  | 'custom';
 
 export interface TypographySettings {
   uiFontPreset: UiFontPreset;

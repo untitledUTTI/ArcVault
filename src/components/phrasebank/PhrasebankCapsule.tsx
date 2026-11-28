@@ -48,6 +48,7 @@ import type {
 } from '../../types/archive';
 import type { DocumentEditorHandle, EditorSelectionInfo } from '../DocumentEditor';
 import { useAnimatedPresence } from '../../platform/useAnimatedPresence';
+import { startResizeDrag } from '../../platform/resizeDrag';
 import { ContextAnalysisTab } from './ContextAnalysisTab';
 import { FavoritesLibraryTab } from './FavoritesLibraryTab';
 import { PlaceholdersTab, SkeletonTab } from './PlaceholdersAndSkeletonTab';
@@ -65,6 +66,7 @@ interface PhrasebankCapsuleProps {
   selectionInfo: EditorSelectionInfo | null;
   editorRef: React.RefObject<DocumentEditorHandle | null>;
   mobileMode?: 'desktop' | 'fab-sheet';
+  isTouch?: boolean;
   mobileSheetOpen?: boolean;
   onSetMobileSheetOpen?: (open: boolean) => void;
   onHaptic?: (pattern: HapticPattern) => void;
@@ -143,6 +145,7 @@ export const PhrasebankCapsule: React.FC<PhrasebankCapsuleProps> = ({
   selectionInfo,
   editorRef,
   mobileMode = 'desktop',
+  isTouch = false,
   mobileSheetOpen,
   onSetMobileSheetOpen,
   onHaptic,
@@ -247,8 +250,8 @@ export const PhrasebankCapsule: React.FC<PhrasebankCapsuleProps> = ({
 
   const computeDefaultCoords = useCallback(
     (w: number, h: number) => {
-      const x = Math.round((bounds.w - w) / 2);
-      const y = Math.round(bounds.h - h - 56);
+      const x = Math.round(bounds.w - w - VIEWPORT_MARGIN);
+      const y = Math.round(bounds.h - h - 24);
       return clampCoords(x, y, w, h, bounds);
     },
     [bounds],
@@ -472,15 +475,23 @@ export const PhrasebankCapsule: React.FC<PhrasebankCapsuleProps> = ({
       recordRecent(text, sourceLabel);
       onNotify(
         hasSelection
-          ? isZh
-            ? '已替换当前选中内容（可 Ctrl+Z 撤销）'
-            : 'Replaced selection (Ctrl+Z to undo)'
-          : isZh
-            ? '已插入光标处（可 Ctrl+Z 撤销）'
-            : 'Inserted at cursor (Ctrl+Z to undo)',
+          ? isTouch
+            ? isZh
+              ? '已替换当前选中内容（可撤销）'
+              : 'Replaced selection (Undoable)'
+            : isZh
+              ? '已替换当前选中内容（可 Ctrl+Z 撤销）'
+              : 'Replaced selection (Ctrl+Z to undo)'
+          : isTouch
+            ? isZh
+              ? '已插入光标处（可撤销）'
+              : 'Inserted at cursor (Undoable)'
+            : isZh
+              ? '已插入光标处（可 Ctrl+Z 撤销）'
+              : 'Inserted at cursor (Ctrl+Z to undo)',
       );
     },
-    [readOnly, editorRef, recordRecent, onNotify, hasSelection, onHaptic, isZh],
+    [readOnly, editorRef, recordRecent, onNotify, hasSelection, onHaptic, isZh, isTouch],
   );
 
   const handleReplaceRange = useCallback(
@@ -492,15 +503,23 @@ export const PhrasebankCapsule: React.FC<PhrasebankCapsuleProps> = ({
       editorRef.current?.replaceRange(from, to, text);
       onNotify(
         label
-          ? isZh
-            ? `${label}（可 Ctrl+Z 撤销）`
-            : `${label} (Ctrl+Z to undo)`
-          : isZh
-            ? '已一键替换正文内容（可 Ctrl+Z 撤销）'
-            : 'Replaced text in document (Ctrl+Z to undo)',
+          ? isTouch
+            ? isZh
+              ? `${label}（可撤销）`
+              : `${label} (Undoable)`
+            : isZh
+              ? `${label}（可 Ctrl+Z 撤销）`
+              : `${label} (Ctrl+Z to undo)`
+          : isTouch
+            ? isZh
+              ? '已一键替换正文内容（可撤销）'
+              : 'Replaced text in document (Undoable)'
+            : isZh
+              ? '已一键替换正文内容（可 Ctrl+Z 撤销）'
+              : 'Replaced text in document (Ctrl+Z to undo)',
       );
     },
-    [readOnly, editorRef, onNotify, isZh],
+    [readOnly, editorRef, onNotify, isZh, isTouch],
   );
 
   const handleSelectAndScrollTo = useCallback(
@@ -651,6 +670,10 @@ export const PhrasebankCapsule: React.FC<PhrasebankCapsuleProps> = ({
     Boolean(mounted && mobileMode === 'fab-sheet' && isSheetOpen),
     250,
   );
+  const mobileBackdropRef = useRef<HTMLDivElement | null>(null);
+  const mobileSheetRef = useRef<HTMLElement | null>(null);
+  const [mobileSheetHeight, setMobileSheetHeight] = useState<number | null>(null);
+  const [isResizingSheet, setIsResizingSheet] = useState(false);
 
   if (!mounted) return null;
 
@@ -710,6 +733,7 @@ export const PhrasebankCapsule: React.FC<PhrasebankCapsuleProps> = ({
 
         {mobileSheetPresence.mounted && (
           <div
+            ref={mobileBackdropRef}
             className={`arc-sheet-backdrop phase-${mobileSheetPresence.phase}`}
             onClick={() => {
               onHaptic?.('selection');
@@ -717,12 +741,50 @@ export const PhrasebankCapsule: React.FC<PhrasebankCapsuleProps> = ({
             }}
           >
             <section
+              ref={mobileSheetRef}
               data-tour="phrasebank-panel"
               className={`arc-bottom-sheet is-tall phase-${mobileSheetPresence.phase}`}
+              style={
+                mobileSheetHeight !== null
+                  ? { height: mobileSheetHeight, maxHeight: '92%' }
+                  : undefined
+              }
               onClick={(e) => e.stopPropagation()}
               aria-label={isZh ? '学术写作句库' : 'Academic Phrasebank'}
             >
-              <div className="arc-sheet-handle-row">
+              <div
+                className={`arc-sheet-handle-row is-resizable ${isResizingSheet ? 'is-resizing' : ''}`}
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label={isZh ? '拖动调节页面大小' : 'Drag to resize sheet'}
+                onPointerDown={(e) => {
+                  const sheetEl = mobileSheetRef.current;
+                  if (!sheetEl) return;
+                  const containerH =
+                    mobileBackdropRef.current?.clientHeight || window.innerHeight || 800;
+                  const initialHeight = Math.round(sheetEl.getBoundingClientRect().height);
+                  const maxH = Math.max(280, Math.round(containerH * 0.92));
+                  const minH = Math.min(220, maxH);
+                  onHaptic?.('selection');
+                  setIsResizingSheet(true);
+                  const onEnd = () => {
+                    setIsResizingSheet(false);
+                    window.removeEventListener('pointerup', onEnd);
+                    window.removeEventListener('pointercancel', onEnd);
+                  };
+                  window.addEventListener('pointerup', onEnd);
+                  window.addEventListener('pointercancel', onEnd);
+                  startResizeDrag({
+                    event: e,
+                    axis: 'y',
+                    initialSize: initialHeight,
+                    min: minH,
+                    max: maxH,
+                    invert: true,
+                    onResize: (nextH) => setMobileSheetHeight(nextH),
+                  });
+                }}
+              >
                 <span className="arc-sheet-handle" />
               </div>
               <header className="arc-sheet-header">

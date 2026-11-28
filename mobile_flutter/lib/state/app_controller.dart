@@ -63,6 +63,10 @@ class AppController extends ChangeNotifier {
   TutorialMode? _tutorialMode;
   final TutorialTargetRegistry tourTargets = TutorialTargetRegistry();
   String? _selectedAnnotationId;
+  int? _locateOffset;
+  int _locateNonce = 0;
+  final Map<String, EditorFormat> _dirtyFormatSource = {};
+  Timer? _formatSyncTimer;
   String? _pendingShareTitle;
   String? _pendingShareText;
 
@@ -112,6 +116,8 @@ class AppController extends ChangeNotifier {
   String? get toastMessage => _toastMessage;
   TutorialMode? get tutorialMode => _tutorialMode;
   String? get selectedAnnotationId => _selectedAnnotationId;
+  int? get locateOffset => _locateOffset;
+  int get locateNonce => _locateNonce;
   String? get pendingShareTitle => _pendingShareTitle;
   String? get pendingShareText => _pendingShareText;
 
@@ -313,8 +319,58 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void locateAnnotation(AnnotationItem ann) {
+    _selectedAnnotationId = ann.id;
+    _locateOffset = ann.anchorStart;
+    _locateNonce++;
+    notifyListeners();
+  }
+
+  ArchiveDocument _syncDocFormatsIfDirty(ArchiveDocument doc) {
+    final sourceFmt = _dirtyFormatSource.remove(doc.id);
+    if (sourceFmt == null) return doc;
+    if (sourceFmt == EditorFormat.markdown) {
+      final nextTex = OoxmlEngine.markdownToLatex(doc.markdownText);
+      return nextTex == doc.latexText ? doc : doc.copyWith(latexText: nextTex);
+    }
+    final nextMd = OoxmlEngine.latexToMarkdown(doc.latexText);
+    return nextMd == doc.markdownText ? doc : doc.copyWith(markdownText: nextMd);
+  }
+
+  void _flushDirtyFormatSyncs({bool notify = true}) {
+    _formatSyncTimer?.cancel();
+    _formatSyncTimer = null;
+    if (_dirtyFormatSource.isEmpty) return;
+    var changed = false;
+    for (var i = 0; i < _documents.length; i++) {
+      final d = _documents[i];
+      if (_dirtyFormatSource.containsKey(d.id)) {
+        final synced = _syncDocFormatsIfDirty(d);
+        if (!identical(synced, d)) {
+          _documents[i] = synced;
+          changed = true;
+        }
+      }
+    }
+    if (changed && notify) {
+      notifyListeners();
+    }
+  }
+
+  void _scheduleDeferredFormatSync(String docId, EditorFormat sourceFmt) {
+    _dirtyFormatSource[docId] = sourceFmt;
+    _formatSyncTimer?.cancel();
+    final delayMs = (_splitPreview && sourceFmt == EditorFormat.latex) ? 350 : 1200;
+    _formatSyncTimer = Timer(Duration(milliseconds: delayMs), () {
+      _flushDirtyFormatSyncs();
+    });
+  }
+
   void toggleSplitPreview() {
     _splitPreview = !_splitPreview;
+    if (_splitPreview && activeDoc != null && _dirtyFormatSource.containsKey(activeDoc!.id)) {
+      _flushDirtyFormatSyncs(notify: false);
+    }
     triggerHaptic(HapticPattern.selection);
     notifyListeners();
   }
@@ -322,13 +378,15 @@ class AppController extends ChangeNotifier {
   void toggleActiveFormat() {
     final doc = activeDoc;
     if (doc == null) return;
+    _history.breakMergeChain();
+    final synced = _syncDocFormatsIfDirty(doc);
     final nextFmt =
-        doc.activeFormat == EditorFormat.markdown ? EditorFormat.latex : EditorFormat.markdown;
-    final syncedText = OoxmlEngine.syncFormatText(doc.activeText, doc.activeFormat, nextFmt);
-    final updated = doc.copyWith(
+        synced.activeFormat == EditorFormat.markdown ? EditorFormat.latex : EditorFormat.markdown;
+    final syncedText = OoxmlEngine.syncFormatText(synced.activeText, synced.activeFormat, nextFmt);
+    final updated = synced.copyWith(
       activeFormat: nextFmt,
-      markdownText: nextFmt == EditorFormat.markdown ? syncedText : doc.markdownText,
-      latexText: nextFmt == EditorFormat.latex ? syncedText : doc.latexText,
+      markdownText: nextFmt == EditorFormat.markdown ? syncedText : synced.markdownText,
+      latexText: nextFmt == EditorFormat.latex ? syncedText : synced.latexText,
       updatedAt: DateTime.now().toIso8601String(),
     );
     _replaceDocument(updated);
@@ -354,12 +412,8 @@ class AppController extends ChangeNotifier {
       newText: nextText,
     );
 
-    final otherFmt =
-        doc.activeFormat == EditorFormat.markdown ? EditorFormat.latex : EditorFormat.markdown;
-    final convertedOther = OoxmlEngine.syncFormatText(nextText, doc.activeFormat, otherFmt);
-
-    final nextMd = doc.activeFormat == EditorFormat.markdown ? nextText : convertedOther;
-    final nextTex = doc.activeFormat == EditorFormat.latex ? nextText : convertedOther;
+    final nextMd = doc.activeFormat == EditorFormat.markdown ? nextText : doc.markdownText;
+    final nextTex = doc.activeFormat == EditorFormat.latex ? nextText : doc.latexText;
 
     final after = DocEditableState(
       markdownText: nextMd,
@@ -367,7 +421,14 @@ class AppController extends ChangeNotifier {
       annotations: nextAnnotations,
       activeFormat: doc.activeFormat,
     );
-    _history.push(historyLabel, before, after);
+    _history.push(
+      historyLabel,
+      before,
+      after,
+      mergeKey: historyLabel == '正文编辑' ? 'text-edit' : null,
+      mergeWindowMs: 500,
+      skipClone: true,
+    );
 
     _replaceDocument(doc.copyWith(
       markdownText: nextMd,
@@ -375,6 +436,7 @@ class AppController extends ChangeNotifier {
       annotations: nextAnnotations,
       updatedAt: DateTime.now().toIso8601String(),
     ));
+    _scheduleDeferredFormatSync(doc.id, doc.activeFormat);
     _scheduleAutosave();
   }
 
@@ -389,6 +451,7 @@ class AppController extends ChangeNotifier {
   void undo() {
     final doc = activeDoc;
     if (doc == null || doc.isSealed) return;
+    _history.breakMergeChain();
     final state = _history.undo();
     if (state == null) return;
     _replaceDocument(doc.copyWith(
@@ -398,12 +461,14 @@ class AppController extends ChangeNotifier {
       activeFormat: state.activeFormat,
       updatedAt: DateTime.now().toIso8601String(),
     ));
+    _scheduleDeferredFormatSync(doc.id, state.activeFormat);
     triggerHaptic(HapticPattern.light);
   }
 
   void redo() {
     final doc = activeDoc;
     if (doc == null || doc.isSealed) return;
+    _history.breakMergeChain();
     final state = _history.redo();
     if (state == null) return;
     _replaceDocument(doc.copyWith(
@@ -413,6 +478,7 @@ class AppController extends ChangeNotifier {
       activeFormat: state.activeFormat,
       updatedAt: DateTime.now().toIso8601String(),
     ));
+    _scheduleDeferredFormatSync(doc.id, state.activeFormat);
     triggerHaptic(HapticPattern.light);
   }
 
@@ -444,12 +510,8 @@ class AppController extends ChangeNotifier {
       nextStatus: accept ? AnnotationStatus.accepted : AnnotationStatus.rejected,
     );
 
-    final nextMd = doc.activeFormat == EditorFormat.markdown
-        ? res.text
-        : OoxmlEngine.latexToMarkdown(res.text);
-    final nextTex = doc.activeFormat == EditorFormat.latex
-        ? res.text
-        : OoxmlEngine.markdownToLatex(res.text);
+    final nextMd = doc.activeFormat == EditorFormat.markdown ? res.text : doc.markdownText;
+    final nextTex = doc.activeFormat == EditorFormat.latex ? res.text : doc.latexText;
 
     _history.push(
       accept ? '接受修订' : '拒绝修订',
@@ -460,6 +522,7 @@ class AppController extends ChangeNotifier {
         annotations: res.annotations,
         activeFormat: doc.activeFormat,
       ),
+      skipClone: true,
     );
 
     _replaceDocument(doc.copyWith(
@@ -468,7 +531,89 @@ class AppController extends ChangeNotifier {
       annotations: res.annotations,
       updatedAt: DateTime.now().toIso8601String(),
     ));
+    _scheduleDeferredFormatSync(doc.id, doc.activeFormat);
     triggerHaptic(HapticPattern.success);
+  }
+
+  int batchAcceptRevisions({Set<String>? targetIds}) =>
+      _applyBatchAction(BatchAnnotationAction.acceptRevisions, targetIds: targetIds);
+
+  int batchRejectRevisions({Set<String>? targetIds}) =>
+      _applyBatchAction(BatchAnnotationAction.rejectRevisions, targetIds: targetIds);
+
+  int batchResolveComments({Set<String>? targetIds}) =>
+      _applyBatchAction(BatchAnnotationAction.resolveComments, targetIds: targetIds);
+
+  int _applyBatchAction(
+    BatchAnnotationAction action, {
+    Set<String>? targetIds,
+  }) {
+    final doc = activeDoc;
+    if (doc == null || doc.isSealed) return 0;
+
+    final res = applyBatchAnnotationAction(
+      text: doc.activeText,
+      annotations: doc.annotations,
+      action: action,
+      targetIds: targetIds,
+    );
+    if (res.affectedCount == 0) return 0;
+
+    final before = DocEditableState(
+      markdownText: doc.markdownText,
+      latexText: doc.latexText,
+      annotations: doc.annotations,
+      activeFormat: doc.activeFormat,
+    );
+
+    final nextMd = doc.activeFormat == EditorFormat.markdown ? res.text : doc.markdownText;
+    final nextTex = doc.activeFormat == EditorFormat.latex ? res.text : doc.latexText;
+
+    final label = switch (action) {
+      BatchAnnotationAction.acceptRevisions => '批量接受修订',
+      BatchAnnotationAction.rejectRevisions => '批量拒绝修订',
+      BatchAnnotationAction.resolveComments => '批量解决批注',
+      BatchAnnotationAction.reopenComments => '批量重开批注',
+    };
+
+    _history.push(
+      label,
+      before,
+      DocEditableState(
+        markdownText: nextMd,
+        latexText: nextTex,
+        annotations: res.annotations,
+        activeFormat: doc.activeFormat,
+      ),
+      skipClone: true,
+    );
+
+    _replaceDocument(doc.copyWith(
+      markdownText: nextMd,
+      latexText: nextTex,
+      annotations: res.annotations,
+      updatedAt: DateTime.now().toIso8601String(),
+    ));
+    if (action == BatchAnnotationAction.acceptRevisions ||
+        action == BatchAnnotationAction.rejectRevisions) {
+      _scheduleDeferredFormatSync(doc.id, doc.activeFormat);
+    }
+    _scheduleAutosave();
+    triggerHaptic(HapticPattern.success);
+
+    final isZh = _settings.locale.isZh;
+    final msg = switch (action) {
+      BatchAnnotationAction.acceptRevisions =>
+        isZh ? '已批量接受 ${res.affectedCount} 条修订' : 'Accepted ${res.affectedCount} revisions',
+      BatchAnnotationAction.rejectRevisions =>
+        isZh ? '已批量拒绝 ${res.affectedCount} 条修订' : 'Rejected ${res.affectedCount} revisions',
+      BatchAnnotationAction.resolveComments =>
+        isZh ? '已批量解决 ${res.affectedCount} 条批注' : 'Resolved ${res.affectedCount} comments',
+      BatchAnnotationAction.reopenComments =>
+        isZh ? '已批量重开 ${res.affectedCount} 条批注' : 'Reopened ${res.affectedCount} comments',
+    };
+    showToast(msg);
+    return res.affectedCount;
   }
 
   void applyAiRewriteToAnnotation(String annId, String rewrite) {
@@ -487,12 +632,8 @@ class AppController extends ChangeNotifier {
       replacement: rewrite,
       nextStatus: AnnotationStatus.resolved,
     );
-    final nextMd = doc.activeFormat == EditorFormat.markdown
-        ? res.text
-        : OoxmlEngine.latexToMarkdown(res.text);
-    final nextTex = doc.activeFormat == EditorFormat.latex
-        ? res.text
-        : OoxmlEngine.markdownToLatex(res.text);
+    final nextMd = doc.activeFormat == EditorFormat.markdown ? res.text : doc.markdownText;
+    final nextTex = doc.activeFormat == EditorFormat.latex ? res.text : doc.latexText;
     _history.push(
       '应用 AI 改写',
       before,
@@ -502,6 +643,7 @@ class AppController extends ChangeNotifier {
         annotations: res.annotations,
         activeFormat: doc.activeFormat,
       ),
+      skipClone: true,
     );
     _replaceDocument(doc.copyWith(
       markdownText: nextMd,
@@ -509,6 +651,7 @@ class AppController extends ChangeNotifier {
       annotations: res.annotations,
       updatedAt: DateTime.now().toIso8601String(),
     ));
+    _scheduleDeferredFormatSync(doc.id, doc.activeFormat);
     triggerHaptic(HapticPattern.success);
   }
 
@@ -549,6 +692,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> saveMilestoneSnapshot({String? label, String? motivationNote}) async {
+    _flushDirtyFormatSyncs(notify: false);
     final doc = activeDoc;
     if (doc == null) return;
     final docSnaps = snapshotsForDoc(doc.id).where((s) => s.branchId == doc.currentBranchId).toList();
@@ -644,6 +788,7 @@ class AppController extends ChangeNotifier {
   }
 
   void toggleSealActiveDoc() {
+    _flushDirtyFormatSyncs(notify: false);
     final doc = activeDoc;
     if (doc == null) return;
     if (doc.isSealed) {
@@ -890,6 +1035,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> exportActiveDocument(String mode) async {
+    _flushDirtyFormatSyncs(notify: false);
     final doc = activeDoc;
     if (doc == null) return;
     final dir = _resolvedBackupDir.isNotEmpty ? _resolvedBackupDir : Directory.systemTemp.path;
@@ -973,6 +1119,7 @@ class AppController extends ChangeNotifier {
   // Vault Encryption & Biometric
   Future<void> lockVaultWithPasscode(String passcode) async {
     if (passcode.trim().isEmpty) return;
+    _flushDirtyFormatSyncs(notify: false);
     _vaultPasscode = passcode;
     _vaultPassHash = VaultCrypto.sha256Hex(passcode);
     for (var i = 0; i < _documents.length; i++) {
@@ -1114,7 +1261,7 @@ class AppController extends ChangeNotifier {
   void setActiveFormatForDoc(String docId, EditorFormat format) {
     final idx = _documents.indexWhere((d) => d.id == docId);
     if (idx < 0) return;
-    final doc = _documents[idx];
+    final doc = _syncDocFormatsIfDirty(_documents[idx]);
     if (doc.activeFormat == format) return;
     final syncedText = OoxmlEngine.syncFormatText(doc.activeText, doc.activeFormat, format);
     _documents[idx] = doc.copyWith(
@@ -1177,6 +1324,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> runManualBackup() async {
+    _flushDirtyFormatSyncs(notify: false);
     final now = DateTime.now().toIso8601String();
     final state = PersistedWorkspaceState(
       savedAt: now,
@@ -1206,6 +1354,7 @@ class AppController extends ChangeNotifier {
   void dispose() {
     _toastTimer?.cancel();
     _autosaveTimer?.cancel();
+    _formatSyncTimer?.cancel();
     tourTargets.dispose();
     super.dispose();
   }

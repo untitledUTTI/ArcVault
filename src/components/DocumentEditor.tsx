@@ -1,8 +1,9 @@
-import React, { useEffect, useImperativeHandle, useRef } from 'react';
+import React, { useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { EditorState, StateEffect, StateField, RangeSetBuilder } from '@codemirror/state';
 import { EditorView, Decoration, type DecorationSet, keymap } from '@codemirror/view';
 import { markdown } from '@codemirror/lang-markdown';
 import { defaultKeymap } from '@codemirror/commands';
+import { estimateOffscreenAnchorTop } from '../core/annotationLayout';
 import type { AnnotationItem, EditorFormat } from '../types/archive';
 
 export interface AnchorGeometry {
@@ -119,19 +120,21 @@ function buildDecorations(
   }
 
   // Highlight protected Zotero / EndNote citation tokens
-  const citRegex = /\[@(?:zotero|endnote):\d{3}\]/g;
-  for (const match of docText.matchAll(citRegex)) {
-    const start = match.index ?? 0;
-    const end = start + match[0].length;
-    if (end <= docLen) {
-      ranges.push({
-        from: start,
-        to: end,
-        deco: Decoration.mark({
-          class: 'cm-arc-citation-shield',
-          attributes: { title: 'Protected Zotero/EndNote citation field' },
-        }),
-      });
+  if (docText.includes('[@')) {
+    const citRegex = /\[@(?:zotero|endnote):\d{3}\]/g;
+    for (const match of docText.matchAll(citRegex)) {
+      const start = match.index ?? 0;
+      const end = start + match[0].length;
+      if (end <= docLen) {
+        ranges.push({
+          from: start,
+          to: end,
+          deco: Decoration.mark({
+            class: 'cm-arc-citation-shield',
+            attributes: { title: 'Protected Zotero/EndNote citation field' },
+          }),
+        });
+      }
     }
   }
 
@@ -167,25 +170,49 @@ const annotationDecoField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 });
 
-function measurePosGeometry(
+interface CachedLayoutRects {
+  scrollerLeft: number;
+  scrollerTop: number;
+  scrollTop: number;
+  contentTop: number;
+  contentLeft: number;
+  contentRight: number;
+  contentHeight: number;
+}
+
+function readLayoutRects(view: EditorView, scroller: HTMLElement): CachedLayoutRects {
+  const scrollerRect = scroller.getBoundingClientRect();
+  const contentRect = view.contentDOM.getBoundingClientRect();
+  const scrollTop = scroller.scrollTop;
+  return {
+    scrollerLeft: scrollerRect.left,
+    scrollerTop: scrollerRect.top,
+    scrollTop,
+    contentTop: contentRect.top - scrollerRect.top + scrollTop,
+    contentLeft: Math.round(contentRect.left - scrollerRect.left),
+    contentRight: Math.round(contentRect.right - scrollerRect.left),
+    contentHeight: Math.max(1, contentRect.height),
+  };
+}
+
+function measurePosGeometryWithRects(
   view: EditorView,
-  scroller: HTMLElement,
+  rects: CachedLayoutRects,
   fromPos: number,
   toPos: number,
 ): { top: number; left: number; right: number; height: number } | null {
   const docLen = view.state.doc.length;
   const safeFrom = Math.max(0, Math.min(docLen, fromPos));
   const safeTo = Math.max(safeFrom, Math.min(docLen, toPos));
-  const scrollerRect = scroller.getBoundingClientRect();
 
   try {
     const cStart = view.coordsAtPos(safeFrom);
     if (cStart) {
       const cEnd = view.coordsAtPos(Math.max(safeFrom, safeTo - 1));
       return {
-        top: Math.round(cStart.top - scrollerRect.top + scroller.scrollTop),
-        left: Math.round(cStart.left - scrollerRect.left),
-        right: Math.round((cEnd?.right ?? cStart.right) - scrollerRect.left),
+        top: Math.round(cStart.top - rects.scrollerTop + rects.scrollTop),
+        left: Math.round(cStart.left - rects.scrollerLeft),
+        right: Math.round((cEnd?.right ?? cStart.right) - rects.scrollerLeft),
         height: Math.round(Math.max(20, (cEnd?.bottom ?? cStart.bottom) - cStart.top)),
       };
     }
@@ -195,19 +222,24 @@ function measurePosGeometry(
 
   try {
     const block = view.lineBlockAt(safeFrom);
-    const contentRect = view.contentDOM.getBoundingClientRect();
-    const contentTop = contentRect.top - scrollerRect.top + scroller.scrollTop;
-    const contentLeft = Math.round(contentRect.left - scrollerRect.left);
-    const contentRight = Math.round(contentRect.right - scrollerRect.left);
     return {
-      top: Math.round(contentTop + block.top),
-      left: contentLeft,
-      right: Math.max(contentLeft + 80, contentRight - 24),
+      top: Math.round(rects.contentTop + block.top),
+      left: rects.contentLeft,
+      right: Math.max(rects.contentLeft + 80, rects.contentRight - 24),
       height: Math.round(Math.max(20, block.height)),
     };
   } catch {
     return null;
   }
+}
+
+function measurePosGeometry(
+  view: EditorView,
+  scroller: HTMLElement,
+  fromPos: number,
+  toPos: number,
+): { top: number; left: number; right: number; height: number } | null {
+  return measurePosGeometryWithRects(view, readLayoutRects(view, scroller), fromPos, toPos);
 }
 
 export const DocumentEditor = React.forwardRef<DocumentEditorHandle, DocumentEditorProps>(({
@@ -227,8 +259,14 @@ export const DocumentEditor = React.forwardRef<DocumentEditorHandle, DocumentEdi
 }, ref) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const lastGeoSigRef = useRef<string>('');
+  const anchorCacheRef = useRef<Record<string, AnchorGeometry>>({});
+  const measureRafRef = useRef<number | null>(null);
+  const pendingMeasureReasonRef = useRef<'scroll' | 'layout' | null>(null);
   const lastSelSigRef = useRef<string>('');
+  const prevLayoutKeyRef = useRef<{
+    annotations: AnnotationItem[];
+    typographyKey?: string;
+  }>({ annotations, typographyKey });
   const latestPropsRef = useRef({
     readOnly,
     annotations,
@@ -312,28 +350,130 @@ export const DocumentEditor = React.forwardRef<DocumentEditorHandle, DocumentEdi
     [scrollContainerRef],
   );
 
-  const measureAnchors = () => {
+  const measureAnchors = useCallback((reason: 'scroll' | 'layout' = 'layout') => {
     const view = viewRef.current;
     const scroller = scrollContainerRef.current;
     if (!view || !scroller) return;
 
-    const geometries: Record<string, AnchorGeometry> = {};
-    const sigParts: string[] = [];
+    const anns = latestPropsRef.current.annotations;
+    const hoveredId = latestPropsRef.current.hoveredAnnotationId;
+    const selectedId = latestPropsRef.current.selectedAnnotationId;
 
-    for (const ann of latestPropsRef.current.annotations) {
-      const geo = measurePosGeometry(view, scroller, ann.anchorStart, ann.anchorEnd);
-      if (geo) {
-        geometries[ann.id] = { id: ann.id, ...geo };
-        sigParts.push(`${ann.id}:${geo.top}:${geo.right}`);
+    if (anns.length === 0) {
+      if (Object.keys(anchorCacheRef.current).length > 0) {
+        anchorCacheRef.current = {};
+        latestPropsRef.current.onAnchorsMeasured({});
+      }
+      return;
+    }
+
+    const docLen = view.state.doc.length;
+    const rects = readLayoutRects(view, scroller);
+    const vp = view.viewport;
+    const vpFrom = Math.max(0, vp.from - 1500);
+    const vpTo = Math.min(docLen, vp.to + 1500);
+
+    const isNearViewport = (ann: AnnotationItem): boolean => {
+      if (ann.id === hoveredId || ann.id === selectedId) return true;
+      const s = Math.max(0, Math.min(docLen, ann.anchorStart));
+      const e = Math.max(s, Math.min(docLen, ann.anchorEnd));
+      return e >= vpFrom && s <= vpTo;
+    };
+
+    if (reason === 'scroll' && Object.keys(anchorCacheRef.current).length > 0) {
+      const prev = anchorCacheRef.current;
+      let changed = false;
+      let nextCache: Record<string, AnchorGeometry> | null = null;
+
+      for (const ann of anns) {
+        if (!isNearViewport(ann) && prev[ann.id]) continue;
+        const geo = isNearViewport(ann)
+          ? measurePosGeometryWithRects(view, rects, ann.anchorStart, ann.anchorEnd)
+          : {
+              top: estimateOffscreenAnchorTop({
+                pos: ann.anchorStart,
+                docLength: docLen,
+                contentTop: rects.contentTop,
+                contentHeight: rects.contentHeight,
+              }),
+              left: rects.contentLeft,
+              right: Math.max(rects.contentLeft + 80, rects.contentRight - 24),
+              height: 20,
+            };
+        if (!geo) continue;
+        const old = prev[ann.id];
+        if (
+          !old ||
+          Math.abs(old.top - geo.top) > 1 ||
+          Math.abs(old.right - geo.right) > 1
+        ) {
+          if (!nextCache) nextCache = { ...prev };
+          nextCache[ann.id] = { id: ann.id, ...geo };
+          changed = true;
+        }
+      }
+
+      if (changed && nextCache) {
+        anchorCacheRef.current = nextCache;
+        latestPropsRef.current.onAnchorsMeasured(nextCache);
+      }
+      return;
+    }
+
+    const prev = anchorCacheRef.current;
+    const geometries: Record<string, AnchorGeometry> = {};
+    const prevCount = Object.keys(prev).length;
+    let nextCount = 0;
+    let changed = false;
+
+    for (const ann of anns) {
+      const geo = isNearViewport(ann)
+        ? measurePosGeometryWithRects(view, rects, ann.anchorStart, ann.anchorEnd)
+        : {
+            top: estimateOffscreenAnchorTop({
+              pos: ann.anchorStart,
+              docLength: docLen,
+              contentTop: rects.contentTop,
+              contentHeight: rects.contentHeight,
+            }),
+            left: rects.contentLeft,
+            right: Math.max(rects.contentLeft + 80, rects.contentRight - 24),
+            height: 20,
+          };
+      if (!geo) continue;
+      geometries[ann.id] = { id: ann.id, ...geo };
+      nextCount += 1;
+      const old = prev[ann.id];
+      if (
+        !old ||
+        Math.abs(old.top - geo.top) > 1 ||
+        Math.abs(old.right - geo.right) > 1
+      ) {
+        changed = true;
       }
     }
 
-    const sig = sigParts.join('|');
-    if (sig !== lastGeoSigRef.current) {
-      lastGeoSigRef.current = sig;
+    if (changed || prevCount !== nextCount) {
+      anchorCacheRef.current = geometries;
       latestPropsRef.current.onAnchorsMeasured(geometries);
     }
-  };
+  }, [scrollContainerRef]);
+
+  const scheduleMeasureAnchors = useCallback(
+    (reason: 'scroll' | 'layout' = 'layout') => {
+      if (pendingMeasureReasonRef.current !== 'layout') {
+        pendingMeasureReasonRef.current = reason;
+      }
+      if (measureRafRef.current !== null) return;
+      measureRafRef.current = requestAnimationFrame(() => {
+        measureRafRef.current = null;
+        const r = pendingMeasureReasonRef.current ?? 'layout';
+        pendingMeasureReasonRef.current = null;
+        measureAnchors(r);
+      });
+    },
+    [measureAnchors],
+  );
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -377,8 +517,10 @@ export const DocumentEditor = React.forwardRef<DocumentEditorHandle, DocumentEdi
                 latestPropsRef.current.onSelectionChange?.(info);
               }
             }
-            if (update.docChanged || update.geometryChanged || update.viewportChanged) {
-              requestAnimationFrame(measureAnchors);
+            if (update.docChanged || update.geometryChanged) {
+              scheduleMeasureAnchors('layout');
+            } else if (update.viewportChanged) {
+              scheduleMeasureAnchors('scroll');
             }
           }),
           EditorView.domEventHandlers({
@@ -484,13 +626,7 @@ export const DocumentEditor = React.forwardRef<DocumentEditorHandle, DocumentEdi
         selectedId: selectedAnnotationId,
       }),
     });
-    requestAnimationFrame(measureAnchors);
-
-    let ro: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined' && scrollContainerRef.current) {
-      ro = new ResizeObserver(() => requestAnimationFrame(measureAnchors));
-      ro.observe(scrollContainerRef.current);
-    }
+    scheduleMeasureAnchors('layout');
 
     return () => {
       clearLp();
@@ -499,13 +635,36 @@ export const DocumentEditor = React.forwardRef<DocumentEditorHandle, DocumentEdi
       hostEl.removeEventListener('pointermove', onPointerMoveLp);
       hostEl.removeEventListener('pointerup', clearLp);
       hostEl.removeEventListener('pointercancel', clearLp);
-      ro?.disconnect();
       view.destroy();
       viewRef.current = null;
     };
     // Re-create only on readOnly toggle; text & annotations sync below
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readOnly]);
+
+  // Single reused ResizeObserver + passive scroll listener for viewport-nearby anchor measurement
+  useEffect(() => {
+    const scroller = scrollContainerRef.current;
+    const hostEl = hostRef.current;
+    const onScroll = () => scheduleMeasureAnchors('scroll');
+    scroller?.addEventListener('scroll', onScroll, { passive: true });
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => scheduleMeasureAnchors('layout'));
+      if (scroller) ro.observe(scroller);
+      if (hostEl) ro.observe(hostEl);
+    }
+
+    return () => {
+      scroller?.removeEventListener('scroll', onScroll);
+      ro?.disconnect();
+      if (measureRafRef.current !== null) {
+        cancelAnimationFrame(measureRafRef.current);
+        measureRafRef.current = null;
+      }
+    };
+  }, [scrollContainerRef, scheduleMeasureAnchors]);
 
   // Sync external text changes (Undo/Redo, format switch, accept revision)
   useEffect(() => {
@@ -530,7 +689,11 @@ export const DocumentEditor = React.forwardRef<DocumentEditorHandle, DocumentEdi
         selectedId: selectedAnnotationId,
       }),
     });
-    requestAnimationFrame(measureAnchors);
+    const layoutChanged =
+      prevLayoutKeyRef.current.annotations !== annotations ||
+      prevLayoutKeyRef.current.typographyKey !== typographyKey;
+    prevLayoutKeyRef.current = { annotations, typographyKey };
+    scheduleMeasureAnchors(layoutChanged ? 'layout' : 'scroll');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [annotations, hoveredAnnotationId, selectedAnnotationId, typographyKey]);
 

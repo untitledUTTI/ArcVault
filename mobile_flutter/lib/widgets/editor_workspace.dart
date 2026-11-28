@@ -14,18 +14,37 @@ import 'touch_scroll_scrubber.dart';
 class AnnotationHighlightTextController extends TextEditingController {
   AnnotationHighlightTextController({
     super.text,
-    required this.annotations,
+    required List<AnnotationItem> annotations,
     required this.selectedAnnotationId,
     required this.commentColor,
     required this.revisionColor,
     required this.accentColor,
-  });
+  }) : _annotations = annotations;
 
-  List<AnnotationItem> annotations;
+  List<AnnotationItem> _annotations;
+  List<AnnotationItem>? _cachedOpenSorted;
   String? selectedAnnotationId;
   Color commentColor;
   Color revisionColor;
   Color accentColor;
+
+  List<AnnotationItem> get annotations => _annotations;
+  set annotations(List<AnnotationItem> next) {
+    if (identical(_annotations, next)) return;
+    _annotations = next;
+    _cachedOpenSorted = null;
+  }
+
+  List<AnnotationItem> _getSortedOpenAnnotations() {
+    final cached = _cachedOpenSorted;
+    if (cached != null) return cached;
+    final list = _annotations
+        .where((a) => a.status == AnnotationStatus.open && a.anchorEnd > a.anchorStart)
+        .toList()
+      ..sort((a, b) => a.anchorStart.compareTo(b.anchorStart));
+    _cachedOpenSorted = list;
+    return list;
+  }
 
   @override
   TextSpan buildTextSpan({
@@ -34,14 +53,11 @@ class AnnotationHighlightTextController extends TextEditingController {
     required bool withComposing,
   }) {
     final full = text;
-    if (full.isEmpty || annotations.isEmpty) {
+    if (full.isEmpty || _annotations.isEmpty) {
       return super.buildTextSpan(context: context, style: style, withComposing: withComposing);
     }
 
-    final openAnns = annotations
-        .where((a) => a.status == AnnotationStatus.open && a.anchorEnd > a.anchorStart)
-        .toList()
-      ..sort((a, b) => a.anchorStart.compareTo(b.anchorStart));
+    final openAnns = _getSortedOpenAnnotations();
 
     if (openAnns.isEmpty) {
       return TextSpan(style: style, text: full);
@@ -104,6 +120,7 @@ class _EditorWorkspaceState extends State<EditorWorkspace> {
   final ScrollController _previewScroll = ScrollController();
   String? _lastDocId;
   EditorFormat? _lastFmt;
+  int _lastLocateNonce = 0;
 
   @override
   void initState() {
@@ -119,6 +136,7 @@ class _EditorWorkspaceState extends State<EditorWorkspace> {
     );
     _lastDocId = widget.controller.activeDoc?.id;
     _lastFmt = widget.controller.activeDoc?.activeFormat;
+    _lastLocateNonce = widget.controller.locateNonce;
   }
 
   @override
@@ -146,6 +164,44 @@ class _EditorWorkspaceState extends State<EditorWorkspace> {
             : TextSelection.collapsed(offset: doc.activeText.length),
       );
     }
+
+    if (doc != null &&
+        widget.controller.locateNonce != _lastLocateNonce &&
+        widget.controller.locateOffset != null) {
+      _lastLocateNonce = widget.controller.locateNonce;
+      _jumpToOffset(doc.activeText, widget.controller.locateOffset!);
+    }
+  }
+
+  void _jumpToOffset(String text, int rawOffset) {
+    final safeOffset = rawOffset.clamp(0, text.length);
+    _textController.selection = TextSelection.collapsed(offset: safeOffset);
+
+    var linesBefore = 0;
+    for (var i = 0; i < safeOffset; i++) {
+      if (text.codeUnitAt(i) == 10) linesBefore++;
+    }
+    var totalLines = linesBefore;
+    for (var i = safeOffset; i < text.length; i++) {
+      if (text.codeUnitAt(i) == 10) totalLines++;
+    }
+    final ratio = totalLines > 0
+        ? (linesBefore / totalLines).clamp(0.0, 1.0)
+        : (text.isNotEmpty ? (safeOffset / text.length).clamp(0.0, 1.0) : 0.0);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_editorScroll.hasClients) return;
+      final pos = _editorScroll.position;
+      if (pos.maxScrollExtent <= 0) return;
+      final target =
+          (ratio * pos.maxScrollExtent - pos.viewportDimension * 0.25)
+              .clamp(0.0, pos.maxScrollExtent);
+      _editorScroll.animateTo(
+        target,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   @override

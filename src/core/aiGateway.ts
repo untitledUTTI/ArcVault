@@ -1,4 +1,4 @@
-import { computeDocumentDiff } from './diffEngine';
+import { buildDiffLinesAndChapters, computeDocumentDiff } from './diffEngine';
 import {
   applyOfflineSkillsToText,
   composeSystemPromptWithSkillsAsync,
@@ -383,21 +383,27 @@ export async function generateSnapshotSummary(params: {
   const diff = computeDocumentDiff(oldText, newText);
 
   const fallback = (): string => {
-    const changedSections = new Set<string>();
-    const lines = newText.split('\n');
-    let currentHeading = '正文';
-    const headingMap = new Map<string, string>();
-    for (const ln of lines) {
-      const hm = ln.match(/^#{1,3}\s+(.+)$/);
-      if (hm) currentHeading = hm[1].trim();
-      headingMap.set(ln.trim(), currentHeading);
+    const structured = buildDiffLinesAndChapters(diff.hunks);
+    const changedSections = structured.chapters
+      .filter((ch) => !ch.isPreamble && ch.hasChanges)
+      .map((ch) => ch.title);
+    if (changedSections.length === 0) {
+      const lines = newText.split('\n');
+      let currentHeading = '正文';
+      const headingMap = new Map<string, string>();
+      for (const ln of lines) {
+        const hm = ln.match(/^#{1,3}\s+(.+)$/);
+        if (hm) currentHeading = hm[1].trim();
+        headingMap.set(ln.trim(), currentHeading);
+      }
+      for (const h of diff.hunks) {
+        if (h.type === 'unchanged') continue;
+        const firstLine = h.value.split('\n')[0]?.trim() ?? '';
+        if (headingMap.has(firstLine)) changedSections.push(headingMap.get(firstLine)!);
+      }
     }
-    for (const h of diff.hunks) {
-      if (h.type === 'unchanged') continue;
-      const firstLine = h.value.split('\n')[0]?.trim() ?? '';
-      if (headingMap.has(firstLine)) changedSections.add(headingMap.get(firstLine)!);
-    }
-    const secLabel = changedSections.size > 0 ? `涉及【${Array.from(changedSections).slice(0, 3).join('、')}】` : '局部段落微调';
+    const uniqueSections = Array.from(new Set(changedSections));
+    const secLabel = uniqueSections.length > 0 ? `涉及【${uniqueSections.slice(0, 3).join('、')}】` : '局部段落微调';
     return `${secLabel}：+${diff.addedChars} 字 / -${diff.removedChars} 字（共 ${diff.changedBlocks} 处变动）。`;
   };
 

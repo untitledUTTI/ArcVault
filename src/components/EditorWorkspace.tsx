@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import katex from 'katex';
-import { GraduationCap, ShieldAlert, Sparkles } from 'lucide-react';
+import { Check, GraduationCap, Search, ShieldAlert, Sparkles, X } from 'lucide-react';
 import {
   DocumentEditor,
   type AnchorGeometry,
@@ -14,6 +14,13 @@ import { ResizeSash } from './ResizeSash';
 import { PhrasebankCapsule } from './phrasebank/PhrasebankCapsule';
 import { MobileQuickFormatBar } from './MobileQuickFormatBar';
 import { RevisionSplitWorkspace } from './RevisionSplitWorkspace';
+import {
+  DEFAULT_ANNOTATION_FILTER,
+  countAnnotationStats,
+  filterAnnotations,
+  isAnnotationFilterActive,
+  type AnnotationFilterState,
+} from '../core/annotationFilter';
 import {
   DEFAULT_REVISION_STICKERS,
   JOURNAL_STRIP_STICKERS,
@@ -38,6 +45,10 @@ import { formatShortcut, type DeviceEnvironment } from '../platform/device';
 import { registerBackHandler } from '../platform/backProtection';
 import { startResizeDrag } from '../platform/resizeDrag';
 import { getEnabledSkills } from '../core/skillRegistry';
+import {
+  applyAnnotationTextReplacement,
+  extractParagraphAtOffset,
+} from '../core/commandHistory';
 import type {
   AiPrivacyPolicy,
   AppSettings,
@@ -88,7 +99,15 @@ interface EditorWorkspaceProps {
   onToggleResolveComment: (id: string) => void;
   onReplyComment: (id: string, text: string) => void;
   onApplyAiSuggestion: (id: string, rewrite: string) => void;
+  onBatchAcceptRevisions?: (targetIds?: string[]) => void;
+  onBatchRejectRevisions?: (targetIds?: string[]) => void;
+  onBatchResolveComments?: (targetIds?: string[]) => void;
   onOpenSkillsManager?: () => void;
+}
+
+function formatFootnoteLabel(id: string): string {
+  const short = id.replace(/^fn/i, '');
+  return short || id;
 }
 
 function renderInlinePreviewHtml(text: string): string {
@@ -97,20 +116,108 @@ function renderInlinePreviewHtml(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // Render inline $...$ with KaTeX
-  return escaped
-    .replace(/\$([^$\n]+)\$/g, (_, math) => {
-      try {
-        return katex.renderToString(math, { throwOnError: false });
-      } catch {
-        return math;
-      }
-    })
+  const mathTokens: string[] = [];
+  const withMathTokens = escaped.replace(/\$([^$\n]+)\$/g, (_, math) => {
+    let rendered = math;
+    try {
+      rendered = katex.renderToString(math, { throwOnError: false });
+    } catch {
+      rendered = math;
+    }
+    const token = `\u0000MATH${mathTokens.length}\u0000`;
+    mathTokens.push(rendered);
+    return token;
+  });
+
+  const formatted = withMathTokens
     .replace(
       /(\[@(?:zotero|endnote):\d{3}\])/g,
       '<span class="cm-arc-citation-shield">$1</span>',
     )
+    .replace(/\[\^([a-zA-Z0-9_-]+)\]/g, (_, id: string) => {
+      const label = formatFootnoteLabel(id);
+      return `<sup class="arc-footnote-ref" title="[^${id}]">[${label}]</sup>`;
+    })
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+  return formatted.replace(/\u0000MATH(\d+)\u0000/g, (_, idx) => mathTokens[Number(idx)] ?? '');
+}
+
+function renderPreviewBlock(blk: string, i: number): React.ReactNode {
+  const t = blk.trim();
+  if (!t) return null;
+  if (t.startsWith('$$') && t.endsWith('$$')) {
+    const math = t.slice(2, -2).trim();
+    return (
+      <div
+        key={i}
+        style={{ margin: '12px 0', textAlign: 'center', overflowX: 'auto' }}
+        dangerouslySetInnerHTML={{
+          __html: katex.renderToString(math, { displayMode: true, throwOnError: false }),
+        }}
+      />
+    );
+  }
+  if (t.startsWith('# ')) {
+    return <h1 key={i} dangerouslySetInnerHTML={{ __html: renderInlinePreviewHtml(t.slice(2)) }} />;
+  }
+  if (t.startsWith('## ')) {
+    return <h2 key={i} dangerouslySetInnerHTML={{ __html: renderInlinePreviewHtml(t.slice(3)) }} />;
+  }
+  if (t.startsWith('### ')) {
+    return <h3 key={i} dangerouslySetInnerHTML={{ __html: renderInlinePreviewHtml(t.slice(4)) }} />;
+  }
+  if (t.startsWith('|')) {
+    const rows = t
+      .split('\n')
+      .filter((r) => r.trim().startsWith('|'))
+      .map((r) => r.trim().slice(1, -1).split('|').map((c) => c.trim()))
+      .filter((cells) => !cells.every((c) => /^:?-+:?$/.test(c)));
+    if (rows.length > 0) {
+      return (
+        <div key={i} className="arc-preview-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                {rows[0].map((c, ci) => (
+                  <th key={ci} dangerouslySetInnerHTML={{ __html: renderInlinePreviewHtml(c) }} />
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(1).map((r, ri) => (
+                <tr key={ri}>
+                  {r.map((c, ci) => (
+                    <td key={ci} dangerouslySetInnerHTML={{ __html: renderInlinePreviewHtml(c) }} />
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+  }
+  const fnLines = t.split('\n');
+  if (fnLines.every((line) => /^\[\^([a-zA-Z0-9_-]+)\]:\s*(.*)$/.test(line.trim()))) {
+    return (
+      <div key={i} className="arc-footnote-list">
+        {fnLines.map((line, li) => {
+          const m = line.trim().match(/^\[\^([a-zA-Z0-9_-]+)\]:\s*(.*)$/);
+          if (!m) return null;
+          return (
+            <div key={li} className="arc-footnote-def">
+              <span className="arc-footnote-label" title={`[^${m[1]}]`}>
+                [{formatFootnoteLabel(m[1])}]
+              </span>
+              <span dangerouslySetInnerHTML={{ __html: renderInlinePreviewHtml(m[2]) }} />
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  return <p key={i} dangerouslySetInnerHTML={{ __html: renderInlinePreviewHtml(t) }} />;
 }
 
 export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
@@ -153,6 +260,9 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   onToggleResolveComment,
   onReplyComment,
   onApplyAiSuggestion,
+  onBatchAcceptRevisions,
+  onBatchRejectRevisions,
+  onBatchResolveComments,
   onOpenSkillsManager,
 }) => {
   const enabledSkills = useMemo(() => getEnabledSkills(settings.skills), [settings.skills]);
@@ -267,8 +377,20 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const [cardRects, setCardRects] = useState<Record<string, { top: number; height: number }>>({});
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [annFilter, setAnnFilter] = useState<AnnotationFilterState>(DEFAULT_ANNOTATION_FILTER);
   const [editorScrollHeight, setEditorScrollHeight] = useState<number>(400);
   const [scrollTick, setScrollTick] = useState<number>(0);
+
+  const filteredAnnotations = useMemo(
+    () => filterAnnotations(doc.annotations, annFilter),
+    [doc.annotations, annFilter],
+  );
+  const annStats = useMemo(() => countAnnotationStats(doc.annotations), [doc.annotations]);
+  const filteredStats = useMemo(
+    () => countAnnotationStats(filteredAnnotations),
+    [filteredAnnotations],
+  );
+  const filterActive = isAnnotationFilterActive(annFilter);
 
   const anchorsRef = useRef(anchors);
   anchorsRef.current = anchors;
@@ -283,11 +405,12 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
 
   const currentText = activeFormat === 'markdown' ? doc.markdownText : doc.latexText;
 
-  // Reset active selection when switching documents
+  // Reset active selection and filters when switching documents
   useEffect(() => {
     setSelectedId(null);
     setHoveredId(null);
     setSelectionInfo(null);
+    setAnnFilter(DEFAULT_ANNOTATION_FILTER);
   }, [doc.id]);
 
   // Collapse if the selected annotation is removed (e.g., Undo)
@@ -328,34 +451,46 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     };
   }, []);
 
-  // Keep right annotation canvas height synced with editor height and update overlay on resize
+  // Keep right annotation canvas height synced with editor height using a single reused ResizeObserver
   useEffect(() => {
+    let rafId: number | null = null;
     const syncEditorHeight = () => {
       const ed = editorScrollRef.current;
-      if (ed) {
-        setEditorScrollHeight(ed.scrollHeight);
-      }
+      if (!ed) return;
+      const nextH = ed.scrollHeight;
+      setEditorScrollHeight((prev) => (Math.abs(prev - nextH) > 1 ? nextH : prev));
     };
     syncEditorHeight();
 
     const onResize = () => {
-      syncEditorHeight();
-      scheduleScrollTick();
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        syncEditorHeight();
+        scheduleScrollTick();
+      });
     };
     window.addEventListener('resize', onResize);
 
     let ro: ResizeObserver | null = null;
     const inner = editorScrollRef.current?.firstElementChild;
     if (typeof ResizeObserver !== 'undefined' && inner) {
-      ro = new ResizeObserver(syncEditorHeight);
+      ro = new ResizeObserver(() => {
+        if (rafId !== null) return;
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          syncEditorHeight();
+        });
+      });
       ro.observe(inner);
     }
 
     return () => {
       window.removeEventListener('resize', onResize);
       ro?.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [doc.id, activeFormat, currentText, anchors, scheduleScrollTick]);
+  }, [doc.id, activeFormat, scheduleScrollTick]);
 
   const alignViewportToAnnotation = useCallback((id: string, source: 'editor' | 'card') => {
     if (alignRefineTimerRef.current !== null) {
@@ -894,6 +1029,82 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     [pendingParaConfirm, buildParaConfirmState],
   );
 
+  const handleRevisionApplyAiSuggestion = useCallback(
+    (annId: string, rewrite: string) => {
+      const targetAnn = doc.annotations.find((a) => a.id === annId);
+      const targetPara = annotatedParagraphs.find((p) =>
+        p.anns.some((a) => a.id === annId),
+      );
+      const existingSess =
+        paraSessionRef.current &&
+        targetPara &&
+        paraSessionRef.current.paraStart === targetPara.start
+          ? paraSessionRef.current
+          : null;
+
+      const originalFullText = existingSess
+        ? existingSess.originalFullText
+        : currentText;
+      const originalParaText = existingSess
+        ? existingSess.originalParaText
+        : (targetPara?.text ??
+          (targetAnn
+            ? extractParagraphAtOffset(currentText, targetAnn.anchorStart).text
+            : currentText));
+
+      const mutated = applyAnnotationTextReplacement({
+        text: currentText,
+        annotations: doc.annotations,
+        targetId: annId,
+        replacementText: rewrite,
+        newStatus: 'resolved',
+      });
+      const updatedAnn = mutated.annotations.find((a) => a.id === annId);
+      const updatedPara = extractParagraphAtOffset(
+        mutated.text,
+        updatedAnn?.anchorStart ?? targetPara?.start ?? 0,
+      );
+
+      onApplyAiSuggestion(annId, rewrite);
+
+      if (mutated.text === originalFullText) {
+        return;
+      }
+
+      const nextSess = {
+        paraStart: updatedPara.start,
+        annId,
+        originalFullText,
+        originalParaText,
+        latestParaText: updatedPara.text,
+        dirty: true,
+      };
+      paraSessionRef.current = nextSess;
+
+      const isParaFocused =
+        editingParaStart === updatedPara.start &&
+        typeof document !== 'undefined' &&
+        document.activeElement === activeParaTextareaRef.current;
+
+      if (!isParaFocused) {
+        setEditingParaStart(null);
+        onHaptic?.('warning');
+        setPendingParaConfirm(
+          (prev) => prev ?? buildParaConfirmState(nextSess),
+        );
+      }
+    },
+    [
+      doc.annotations,
+      annotatedParagraphs,
+      currentText,
+      onApplyAiSuggestion,
+      editingParaStart,
+      onHaptic,
+      buildParaConfirmState,
+    ],
+  );
+
   const splitContainerClass = revisionMode
     ? `arc-revision-split ${isLandscapeSplit ? 'is-landscape' : 'is-portrait'} ${keyboardOpen ? 'is-keyboard-open' : ''}`
     : '';
@@ -1178,8 +1389,16 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                     !pbSettings.enabled
                       ? dict.editor.phrasebankReenableTip
                       : capsuleDismissed
-                        ? dict.editor.phrasebankShowTip
-                        : dict.editor.phrasebankHideTip
+                        ? deviceEnv?.isTouch
+                          ? settings.locale === 'zh-CN'
+                            ? '打开学术写作句库'
+                            : 'Open Academic Phrasebank'
+                          : dict.editor.phrasebankShowTip
+                        : deviceEnv?.isTouch
+                          ? settings.locale === 'zh-CN'
+                            ? '暂时隐藏学术写作句库'
+                            : 'Temporarily hide Phrasebank'
+                          : dict.editor.phrasebankHideTip
                   }
                 >
                   <GraduationCap size={12} />
@@ -1187,7 +1406,11 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                     {!pbSettings.enabled
                       ? dict.editor.phrasebankEnableBtn
                       : capsuleDismissed
-                        ? dict.editor.phrasebankBtn
+                        ? deviceEnv?.isTouch
+                          ? settings.locale === 'zh-CN'
+                            ? '学术句库'
+                            : 'Phrasebank'
+                          : dict.editor.phrasebankBtn
                         : dict.editor.phrasebankActiveBtn}
                   </span>
                 </button>
@@ -1235,6 +1458,9 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
             onSelectionChange={setSelectionInfo}
             onHoverAnnotation={setHoveredId}
             onClickAnnotation={(id) => {
+              if (!filteredAnnotations.some((a) => a.id === id)) {
+                setAnnFilter(DEFAULT_ANNOTATION_FILTER);
+              }
               setSelectedId(id);
               onHaptic?.('selection');
               alignViewportToAnnotation(id, 'editor');
@@ -1321,7 +1547,10 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
               onRejectRevision={onRejectRevision}
               onToggleResolveComment={onToggleResolveComment}
               onReplyComment={onReplyComment}
-              onApplyAiSuggestion={onApplyAiSuggestion}
+              onApplyAiSuggestion={handleRevisionApplyAiSuggestion}
+              onBatchAcceptRevisions={onBatchAcceptRevisions}
+              onBatchRejectRevisions={onBatchRejectRevisions}
+              onBatchResolveComments={onBatchResolveComments}
               onHaptic={(p) => onHaptic?.(p)}
             />
           </div>
@@ -1351,29 +1580,7 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           {doc.officePreview ? (
             <OfficePreviewPane isZh={settings.locale === 'zh-CN'} title={doc.title} preview={doc.officePreview} />
           ) : (
-            previewBlocks.map((blk, i) => {
-              const t = blk.trim();
-              if (!t) return null;
-              if (t.startsWith('$$') && t.endsWith('$$')) {
-                const math = t.slice(2, -2).trim();
-                return (
-                  <div
-                    key={i}
-                    style={{ margin: '12px 0', textAlign: 'center' }}
-                    dangerouslySetInnerHTML={{
-                      __html: katex.renderToString(math, { displayMode: true, throwOnError: false }),
-                    }}
-                  />
-                );
-              }
-              if (t.startsWith('# ')) {
-                return <h1 key={i} dangerouslySetInnerHTML={{ __html: renderInlinePreviewHtml(t.slice(2)) }} />;
-              }
-              if (t.startsWith('## ')) {
-                return <h2 key={i} dangerouslySetInnerHTML={{ __html: renderInlinePreviewHtml(t.slice(3)) }} />;
-              }
-              return <p key={i} dangerouslySetInnerHTML={{ __html: renderInlinePreviewHtml(t) }} />;
-            })
+            previewBlocks.map((blk, i) => renderPreviewBlock(blk, i))
           )}
         </div>
       )}
@@ -1405,52 +1612,7 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
               <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 12 }}>
                 {dict.editor.previewSubtitle}
               </div>
-              {previewBlocks.map((blk, i) => {
-                const t = blk.trim();
-                if (!t) return null;
-                if (t.startsWith('$$') && t.endsWith('$$')) {
-                  const math = t.slice(2, -2).trim();
-                  return (
-                    <div
-                      key={i}
-                      style={{ margin: '12px 0', textAlign: 'center' }}
-                      dangerouslySetInnerHTML={{
-                        __html: katex.renderToString(math, { displayMode: true, throwOnError: false }),
-                      }}
-                    />
-                  );
-                }
-                if (t.startsWith('# ')) {
-                  return <h1 key={i} dangerouslySetInnerHTML={{ __html: renderInlinePreviewHtml(t.slice(2)) }} />;
-                }
-                if (t.startsWith('## ')) {
-                  return <h2 key={i} dangerouslySetInnerHTML={{ __html: renderInlinePreviewHtml(t.slice(3)) }} />;
-                }
-                if (t.startsWith('|')) {
-                  const rows = t
-                    .split('\n')
-                    .filter((r) => r.trim().startsWith('|'))
-                    .map((r) => r.trim().slice(1, -1).split('|').map((c) => c.trim()))
-                    .filter((cells) => !cells.every((c) => /^:?-+:?$/.test(c)));
-                  if (rows.length > 0) {
-                    return (
-                      <table key={i}>
-                        <thead>
-                          <tr>{rows[0].map((c, ci) => <th key={ci}>{c}</th>)}</tr>
-                        </thead>
-                        <tbody>
-                          {rows.slice(1).map((r, ri) => (
-                            <tr key={ri}>{r.map((c, ci) => <td key={ci}>{c}</td>)}</tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    );
-                  }
-                }
-                return (
-                  <p key={i} dangerouslySetInnerHTML={{ __html: renderInlinePreviewHtml(t) }} />
-                );
-              })}
+              {previewBlocks.map((blk, i) => renderPreviewBlock(blk, i))}
             </>
           )}
         </div>
@@ -1475,43 +1637,186 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
             })
           }
         />
-        <div
-          ref={annotationScrollRef}
-          data-tour="annotation-sidebar"
-          className="arc-annotation-pane"
-          onScroll={handleAnnotationScroll}
-          onClick={(e) => {
-            if (e.target === e.currentTarget && selectedId) {
-              setSelectedId(null);
-            }
-          }}
-        >
-          <AnnotationSidebar
-            dict={dict}
-            annotations={doc.annotations}
-            anchors={anchors}
-            documentText={currentText}
-            settings={settings}
-            effectiveAiPolicy={effectiveAiPolicy}
-            hoveredId={hoveredId}
-            selectedId={selectedId}
-            minCanvasHeight={editorScrollHeight}
-            readOnly={doc.isSealed}
-            onHover={setHoveredId}
-            onSelect={(id) => {
-              setSelectedId(id);
-              if (id) {
-                alignViewportToAnnotation(id, 'card');
+        <div className="arc-annotation-column">
+          {(doc.annotations.length > 0 || filterActive) && (
+            <div className="arc-annotation-toolbar">
+              <div className="arc-annotation-search">
+                <Search size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                <input
+                  type="text"
+                  value={annFilter.query}
+                  onChange={(e) =>
+                    setAnnFilter((prev) => ({ ...prev, query: e.target.value }))
+                  }
+                  placeholder={dict.annotations.searchPlaceholder}
+                  aria-label={dict.annotations.searchPlaceholder}
+                />
+                {annFilter.query && (
+                  <button
+                    type="button"
+                    className="arc-ann-clear-btn"
+                    onClick={() => setAnnFilter((prev) => ({ ...prev, query: '' }))}
+                    aria-label={dict.annotations.clearFilters}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+                <span className="arc-badge" style={{ fontSize: 10.5, flexShrink: 0 }}>
+                  {filteredAnnotations.length}/{annStats.total}
+                </span>
+              </div>
+
+              <div className="arc-annotation-filter-row">
+                {(['all', 'open', 'handled'] as const).map((statusKey) => {
+                  const label =
+                    statusKey === 'all'
+                      ? `${dict.annotations.filterAll} (${annStats.total})`
+                      : statusKey === 'open'
+                        ? `${dict.annotations.filterOpen} (${annStats.open})`
+                        : `${dict.annotations.filterHandled} (${annStats.handled})`;
+                  return (
+                    <button
+                      key={statusKey}
+                      type="button"
+                      className={`arc-ann-chip ${annFilter.status === statusKey ? 'is-active' : ''}`}
+                      onClick={() =>
+                        setAnnFilter((prev) => ({ ...prev, status: statusKey }))
+                      }
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+                <span className="arc-ann-chip-sep" aria-hidden="true" />
+                {(['all', 'comment', 'revision'] as const).map((typeKey) => {
+                  const label =
+                    typeKey === 'all'
+                      ? dict.annotations.filterAll
+                      : typeKey === 'comment'
+                        ? `${dict.annotations.filterComment} (${annStats.comments})`
+                        : `${dict.annotations.filterRevision} (${annStats.revisions})`;
+                  return (
+                    <button
+                      key={typeKey}
+                      type="button"
+                      className={`arc-ann-chip ${annFilter.type === typeKey ? 'is-active' : ''}`}
+                      onClick={() =>
+                        setAnnFilter((prev) => ({ ...prev, type: typeKey }))
+                      }
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {!doc.isSealed &&
+                (filteredStats.openRevisions > 0 || filteredStats.openComments > 0) && (
+                  <div className="arc-annotation-batch-row">
+                    {filteredStats.openRevisions > 0 && (
+                      <>
+                        {onBatchAcceptRevisions && (
+                          <button
+                            type="button"
+                            className="arc-btn arc-btn-primary"
+                            style={{ height: 24, fontSize: 11, padding: '0 8px' }}
+                            onClick={() => {
+                              const ids = filteredAnnotations
+                                .filter((a) => a.type === 'revision' && a.status === 'open')
+                                .map((a) => a.id);
+                              onBatchAcceptRevisions(ids);
+                            }}
+                          >
+                            <Check size={11} />
+                            <span>
+                              {dict.annotations.batchAcceptRevisions} ({filteredStats.openRevisions})
+                            </span>
+                          </button>
+                        )}
+                        {onBatchRejectRevisions && (
+                          <button
+                            type="button"
+                            className="arc-btn"
+                            style={{ height: 24, fontSize: 11, padding: '0 8px' }}
+                            onClick={() => {
+                              const ids = filteredAnnotations
+                                .filter((a) => a.type === 'revision' && a.status === 'open')
+                                .map((a) => a.id);
+                              onBatchRejectRevisions(ids);
+                            }}
+                          >
+                            <X size={11} />
+                            <span>
+                              {dict.annotations.batchRejectRevisions} ({filteredStats.openRevisions})
+                            </span>
+                          </button>
+                        )}
+                      </>
+                    )}
+                    {filteredStats.openComments > 0 && onBatchResolveComments && (
+                      <button
+                        type="button"
+                        className="arc-btn"
+                        style={{ height: 24, fontSize: 11, padding: '0 8px' }}
+                        onClick={() => {
+                          const ids = filteredAnnotations
+                            .filter((a) => a.type === 'comment' && a.status === 'open')
+                            .map((a) => a.id);
+                          onBatchResolveComments(ids);
+                        }}
+                      >
+                        <Check size={11} />
+                        <span>
+                          {dict.annotations.batchResolveComments} ({filteredStats.openComments})
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                )}
+            </div>
+          )}
+          <div
+            ref={annotationScrollRef}
+            data-tour="annotation-sidebar"
+            className="arc-annotation-pane"
+            onScroll={handleAnnotationScroll}
+            onClick={(e) => {
+              if (e.target === e.currentTarget && selectedId) {
+                setSelectedId(null);
               }
             }}
-            onLocate={(id) => alignViewportToAnnotation(id, 'card')}
-            onAcceptRevision={onAcceptRevision}
-            onRejectRevision={onRejectRevision}
-            onToggleResolveComment={onToggleResolveComment}
-            onReplyComment={onReplyComment}
-            onApplyAiSuggestion={onApplyAiSuggestion}
-            onCardRectsMeasured={handleCardRectsMeasured}
-          />
+          >
+            <AnnotationSidebar
+              dict={dict}
+              annotations={filteredAnnotations}
+              totalAnnotationCount={doc.annotations.length}
+              isFiltered={filterActive}
+              onClearFilters={() => setAnnFilter(DEFAULT_ANNOTATION_FILTER)}
+              anchors={anchors}
+              documentText={currentText}
+              settings={settings}
+              effectiveAiPolicy={effectiveAiPolicy}
+              hoveredId={hoveredId}
+              selectedId={selectedId}
+              minCanvasHeight={editorScrollHeight}
+              scrollContainerRef={annotationScrollRef}
+              readOnly={doc.isSealed}
+              onHover={setHoveredId}
+              onSelect={(id) => {
+                setSelectedId(id);
+                if (id) {
+                  alignViewportToAnnotation(id, 'card');
+                }
+              }}
+              onLocate={(id) => alignViewportToAnnotation(id, 'card')}
+              onAcceptRevision={onAcceptRevision}
+              onRejectRevision={onRejectRevision}
+              onToggleResolveComment={onToggleResolveComment}
+              onReplyComment={onReplyComment}
+              onApplyAiSuggestion={onApplyAiSuggestion}
+              onCardRectsMeasured={handleCardRectsMeasured}
+            />
+          </div>
         </div>
       </div>
 
@@ -1526,6 +1831,7 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         selectionInfo={selectionInfo}
         editorRef={documentEditorRef}
         mobileMode={useMobileSheets ? 'fab-sheet' : 'desktop'}
+        isTouch={Boolean(deviceEnv?.isTouch)}
         mobileSheetOpen={mobilePbSheetOpen}
         onSetMobileSheetOpen={setMobilePbSheetOpen}
         onHaptic={onHaptic}

@@ -26,6 +26,7 @@ import type { CasObjectStore } from '../core/casStore';
 
 interface PaperStudioModalProps {
   initialTab?: 'consistency' | 'rebuttal';
+  isTouch?: boolean;
   doc: ArchiveDocument;
   snapshots: Snapshot[];
   cas: CasObjectStore;
@@ -37,6 +38,7 @@ interface PaperStudioModalProps {
 
 export const PaperStudioModal: React.FC<PaperStudioModalProps> = ({
   initialTab = 'consistency',
+  isTouch = false,
   doc,
   snapshots,
   cas,
@@ -239,7 +241,15 @@ export const PaperStudioModal: React.FC<PaperStudioModalProps> = ({
                           onClick={() => onApplyQuickFix(issue.snippet, issue.suggestedFix!)}
                         >
                           <Check size={12} />
-                          <span>{isZh ? '一键同步修正（可 Ctrl+Z）' : 'Quick Fix (Ctrl+Z)'}</span>
+                          <span>
+                            {isTouch
+                              ? isZh
+                                ? '一键同步修正（可撤销）'
+                                : 'Quick Fix (Undoable)'
+                              : isZh
+                                ? '一键同步修正（可 Ctrl+Z）'
+                                : 'Quick Fix (Ctrl+Z)'}
+                          </span>
                         </button>
                       )}
                     </div>

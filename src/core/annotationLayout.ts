@@ -209,3 +209,109 @@ export function computeAlignedScrollTargets(
     shouldScrollAnnotation: Math.abs(targetAnnTop - annScrollTop) > 2,
   };
 }
+
+export interface VisibleAnnotationWindowInput {
+  placements: AnnotationLayoutPlacement[];
+  scrollTop: number;
+  viewportHeight: number;
+  overscanPx?: number;
+  pinnedIds?: ReadonlyArray<string | null | undefined>;
+}
+
+/**
+ * Returns only annotation placements intersecting the visible viewport (with overscan),
+ * plus any pinned cards (e.g., expanded, hovered, or animating-closed), preserving placement order.
+ * Runs in O(log N + K) because non-overlapping cards have strictly monotonic `top + height`.
+ */
+export function computeVisibleAnnotationWindow(
+  input: VisibleAnnotationWindowInput,
+): AnnotationLayoutPlacement[] {
+  const {
+    placements,
+    scrollTop,
+    viewportHeight,
+    overscanPx = 480,
+    pinnedIds = [],
+  } = input;
+
+  const n = placements.length;
+  if (n === 0) return [];
+
+  const effectiveViewport = Math.max(viewportHeight, 400);
+  const minY = scrollTop - overscanPx;
+  const maxY = scrollTop + effectiveViewport + overscanPx;
+
+  // Binary search for the first card whose bottom (top + height) >= minY
+  let lo = 0;
+  let hi = n - 1;
+  let startIdx = n;
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const p = placements[mid];
+    if (p.top + p.height >= minY) {
+      startIdx = mid;
+      hi = mid - 1;
+    } else {
+      lo = mid + 1;
+    }
+  }
+
+  // Binary search for the last card whose top <= maxY
+  lo = 0;
+  hi = n - 1;
+  let endIdx = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    if (placements[mid].top <= maxY) {
+      endIdx = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  const pinnedSet = new Set<string>();
+  for (const id of pinnedIds) {
+    if (id) pinnedSet.add(id);
+  }
+
+  if (startIdx > endIdx) {
+    if (pinnedSet.size === 0) return [];
+    return placements.filter((p) => pinnedSet.has(p.ann.id));
+  }
+
+  if (pinnedSet.size === 0) {
+    return placements.slice(startIdx, endIdx + 1);
+  }
+
+  const result: AnnotationLayoutPlacement[] = [];
+  for (let i = 0; i < startIdx; i += 1) {
+    if (pinnedSet.has(placements[i].ann.id)) {
+      result.push(placements[i]);
+    }
+  }
+  for (let i = startIdx; i <= endIdx; i += 1) {
+    result.push(placements[i]);
+  }
+  for (let i = endIdx + 1; i < n; i += 1) {
+    if (pinnedSet.has(placements[i].ann.id)) {
+      result.push(placements[i]);
+    }
+  }
+  return result;
+}
+
+/**
+ * Estimates vertical anchor top coordinate for offscreen annotations in O(1) without DOM reads.
+ */
+export function estimateOffscreenAnchorTop(params: {
+  pos: number;
+  docLength: number;
+  contentTop: number;
+  contentHeight: number;
+}): number {
+  const { pos, docLength, contentTop, contentHeight } = params;
+  const clampedPos = Math.max(0, Math.min(docLength, pos));
+  const ratio = clampedPos / Math.max(1, docLength);
+  return Math.round(contentTop + ratio * Math.max(1, contentHeight));
+}

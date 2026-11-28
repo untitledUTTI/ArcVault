@@ -131,6 +131,22 @@ class ArcStrings {
   String get annotationsEmpty => isZh
       ? '当前文档暂无 Word 批注或修订卡片。导入带导师批注/修订的 `.docx` 后，卡片将在此显示。'
       : 'No Word comments or track-changes yet. Import a `.docx` with reviewer comments to see them here.';
+  String get searchAnnotationsHint =>
+      isZh ? '搜索批注、原文、作者或回复...' : 'Search notes, quotes, authors, replies...';
+  String get filterAll => isZh ? '全部' : 'All';
+  String get filterOpen => isZh ? '待处理' : 'Open';
+  String get filterHandled => isZh ? '已处理' : 'Handled';
+  String get filterComment => isZh ? '批注' : 'Comments';
+  String get filterRevision => isZh ? '修订' : 'Revisions';
+  String get listOverview => isZh ? '列表速览' : 'List View';
+  String get cardView => isZh ? '卡片视图' : 'Card View';
+  String get locateAnchor => isZh ? '定位原文' : 'Locate';
+  String get batchAcceptRevisions => isZh ? '批量接受' : 'Accept All';
+  String get batchRejectRevisions => isZh ? '批量拒绝' : 'Reject All';
+  String get batchResolveComments => isZh ? '批量解决' : 'Resolve All';
+  String get noMatchingAnnotations =>
+      isZh ? '没有符合筛选或搜索条件的批注与修订' : 'No matching annotations or revisions';
+  String get resetFilters => isZh ? '重置筛选' : 'Reset';
   String get aiPolicyLabel => isZh ? 'AI 隐私锁：' : 'AI Privacy: ';
   String get aiCloudLocal => isZh ? '云端/本地可用' : 'Cloud / Local';
   String get aiLocalOnly => isZh ? '仅本地模型' : 'Local Model Only';

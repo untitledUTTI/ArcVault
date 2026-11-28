@@ -47,6 +47,7 @@ import {
   formatActionGateButtonText,
   getInitialTutorialPhase,
   getStepAdvanceRelation,
+  resolveTutorialStepCopy,
   shouldShowMobilePermissionsStep,
   type MobilePermissionCardDef,
   type SpotlightRect,
@@ -1509,7 +1510,8 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
     cardWidth: cardSize.width,
     cardHeight: cardSize.height,
     preferredPlacement: step.preferredPlacement ?? 'auto',
-    forcePlacement: deviceEnv.isPhone && step.phoneForceBottom ? 'bottom' : undefined,
+    forcePlacement:
+      step.forceBottom || (isCompact && step.phoneForceBottom) ? 'bottom' : undefined,
     margin: isCompact ? 10 : 14,
     topMargin: (isCompact ? 10 : 14) + safeTopInset,
     gap: 12,
@@ -1526,6 +1528,8 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
         : relation === 'next-module'
           ? '进入下一板块'
           : '下一步';
+
+  const stepCopy = resolveTutorialStepCopy(step, deviceEnv.isPhone || deviceEnv.isTablet);
 
   return (
     <div ref={rootRef} className="arc-tour-root" aria-live="polite">
@@ -1607,7 +1611,7 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
           .join(' ')}
         role="dialog"
         aria-modal="false"
-        aria-label={step.title}
+        aria-label={stepCopy.title}
         style={{
           top: cardPos.top,
           left: cardPos.left,
@@ -1676,14 +1680,14 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
         <div className="arc-tour-card-body">
           <div className="arc-tour-card-title">
             <Sparkles size={15} color="var(--accent)" style={{ flexShrink: 0, marginTop: 2 }} />
-            <span>{step.title}</span>
+            <span>{stepCopy.title}</span>
           </div>
 
-          <p className="arc-tour-card-desc">{step.description}</p>
+          <p className="arc-tour-card-desc">{stepCopy.description}</p>
 
-          {step.bullets && step.bullets.length > 0 && (
+          {stepCopy.bullets && stepCopy.bullets.length > 0 && (
             <ul className="arc-tour-card-bullets">
-              {step.bullets.map((b) => (
+              {stepCopy.bullets.map((b) => (
                 <li key={b}>{b}</li>
               ))}
             </ul>

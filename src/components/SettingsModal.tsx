@@ -1803,7 +1803,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
 
-                  {layoutPresets.length > 0 && (
+                  {!deviceEnv?.isPhone && !deviceEnv?.isTabletPortrait && layoutPresets.length > 0 && (
                     <div className="arc-settings-card">
                       <div className="arc-settings-card-title" style={{ flexWrap: 'wrap', gap: 8 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1992,16 +1992,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         options={
                           isZh
                             ? [
-                                { value: 'system-sans', label: '系统无衬线（Inter / 微软雅黑）' },
+                                { value: 'system-sans', label: '系统无衬线（Inter / 思源黑体 / 微软雅黑）' },
+                                { value: 'noto-sans-sc', label: '思源黑体（Google Fonts · Noto Sans SC）' },
                                 { value: 'pingfang', label: '苹果 / 鸿蒙无衬线（PingFang / HarmonyOS）' },
-                                { value: 'serif', label: '人文衬线体（思源宋体 / Noto Serif）' },
+                                { value: 'serif', label: '思源宋体（Google Fonts · Noto Serif SC）' },
                                 { value: 'rounded', label: '圆润几何体（Rounded / 幼圆）' },
                                 { value: 'custom', label: '自定义本机字体名称...' },
                               ]
                             : [
-                                { value: 'system-sans', label: 'System Sans (Inter / System UI)' },
+                                { value: 'system-sans', label: 'System Sans (Inter / Noto Sans SC / System UI)' },
+                                { value: 'noto-sans-sc', label: 'Noto Sans SC (Google Fonts)' },
                                 { value: 'pingfang', label: 'PingFang / HarmonyOS Sans' },
-                                { value: 'serif', label: 'Editorial Serif (Noto Serif / Georgia)' },
+                                { value: 'serif', label: 'Noto Serif SC (Google Fonts)' },
                                 { value: 'rounded', label: 'Rounded Geometric (SF / Nunito)' },
                                 { value: 'custom', label: 'Custom Local Font Name...' },
                               ]
@@ -2019,15 +2021,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           isZh
                             ? [
                                 { value: 'sans', label: '现代无衬线（清晰高对比）' },
-                                { value: 'academic-serif', label: '学术衬线宋体（思源宋体 / 宋体）' },
-                                { value: 'wenkai', label: '手写楷体 / 霞鹜文楷（LXGW WenKai）' },
+                                { value: 'noto-sans-sc', label: '思源黑体（Google Fonts · Noto Sans SC）' },
+                                { value: 'academic-serif', label: '思源宋体（Google Fonts · Noto Serif SC）' },
+                                { value: 'wenkai', label: '霞鹜文楷（Google Fonts TC / 本地 SC）' },
+                                { value: 'xiaowei', label: '站酷小薇体（Google Fonts · ZCOOL XiaoWei）' },
                                 { value: 'mono', label: '等宽代码体（JetBrains Mono / Cascadia）' },
                                 { value: 'custom', label: '自定义本机字体名称...' },
                               ]
                             : [
                                 { value: 'sans', label: 'Modern Sans (Crisp Contrast)' },
-                                { value: 'academic-serif', label: 'Academic Serif (Noto Serif / Georgia)' },
-                                { value: 'wenkai', label: 'Calligraphic / LXGW WenKai' },
+                                { value: 'noto-sans-sc', label: 'Noto Sans SC (Google Fonts)' },
+                                { value: 'academic-serif', label: 'Noto Serif SC (Google Fonts)' },
+                                { value: 'wenkai', label: 'LXGW WenKai (Google Fonts TC / Local SC)' },
+                                { value: 'xiaowei', label: 'ZCOOL XiaoWei (Google Fonts)' },
                                 { value: 'mono', label: 'Monospace (JetBrains Mono / Cascadia)' },
                                 { value: 'custom', label: 'Custom Local Font Name...' },
                               ]

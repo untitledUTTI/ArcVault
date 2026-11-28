@@ -273,6 +273,11 @@ describe('Live In-App Spotlight Tutorial & First-Run Warning Gate', () => {
     const allSteps = TUTORIAL_MODULES.flatMap((m) => m.steps);
     const forcedIds = allSteps.filter((s) => s.phoneForceBottom).map((s) => s.id);
     expect(forcedIds).toEqual([
+      'ws-trash-modal',
+      'cover-pick-line',
+      'cover-footer-btns',
+      'ver-diff-modal',
+      'ver-branch-modal',
       'ai-paper-studio',
       'ai-context-assets',
       'ai-evolution',

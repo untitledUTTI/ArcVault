@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
+  Menu,
   Minimize2,
   Monitor,
   PanelLeftOpen,
@@ -79,6 +80,8 @@ import {
   CommandHistory,
   adjustAnchorsForTextEdit,
   applyAnnotationTextReplacement,
+  applyBatchAnnotationAction,
+  type HistoryPushOptions,
 } from './core/commandHistory';
 import { extractDeletedDarlings } from './core/diffEngine';
 import { generateSnapshotSummary, resolveEffectiveAiPolicy } from './core/aiGateway';
@@ -383,6 +386,8 @@ export function App() {
   const casRef = useRef<CasObjectStore>(new CasObjectStore());
   const parsedBundlesRef = useRef<Record<string, ParsedDocxBundle>>({});
   const historiesRef = useRef<Record<string, CommandHistory<DocEditableState>>>({});
+  const dirtyFormatSourceRef = useRef<Map<string, EditorFormat>>(new Map());
+  const formatSyncTimerRef = useRef<number | null>(null);
   const documentsRef = useRef<ArchiveDocument[]>([]);
   documentsRef.current = documents;
   const snapshotsRef = useRef<Snapshot[]>([]);
@@ -661,12 +666,75 @@ export function App() {
     };
   }, [initialLayout.activeDocId]);
 
+  const syncDocFormatsIfDirty = useCallback((doc: ArchiveDocument): ArchiveDocument => {
+    const sourceFmt = dirtyFormatSourceRef.current.get(doc.id);
+    if (!sourceFmt) return doc;
+    dirtyFormatSourceRef.current.delete(doc.id);
+    if (sourceFmt === 'markdown') {
+      const nextTex = syncFormatText(doc.markdownText, 'markdown', 'latex');
+      return nextTex === doc.latexText ? doc : { ...doc, latexText: nextTex };
+    }
+    const nextMd = syncFormatText(doc.latexText, 'latex', 'markdown');
+    return nextMd === doc.markdownText ? doc : { ...doc, markdownText: nextMd };
+  }, []);
+
+  const flushAllDirtyFormatSyncs = useCallback(() => {
+    if (formatSyncTimerRef.current !== null) {
+      window.clearTimeout(formatSyncTimerRef.current);
+      formatSyncTimerRef.current = null;
+    }
+    if (dirtyFormatSourceRef.current.size === 0) return;
+    setDocuments((prev) => {
+      let changed = false;
+      const next = prev.map((d) => {
+        const synced = syncDocFormatsIfDirty(d);
+        if (synced !== d) changed = true;
+        return synced;
+      });
+      return changed ? next : prev;
+    });
+  }, [syncDocFormatsIfDirty]);
+
+  const scheduleDeferredFormatSync = useCallback(
+    (docId: string, sourceFmt: EditorFormat) => {
+      dirtyFormatSourceRef.current.set(docId, sourceFmt);
+      if (formatSyncTimerRef.current !== null) {
+        window.clearTimeout(formatSyncTimerRef.current);
+      }
+      formatSyncTimerRef.current = window.setTimeout(() => {
+        formatSyncTimerRef.current = null;
+        const win = window as Window & {
+          requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+        };
+        if (typeof win.requestIdleCallback === 'function') {
+          win.requestIdleCallback(() => flushAllDirtyFormatSyncs(), { timeout: 600 });
+        } else {
+          flushAllDirtyFormatSyncs();
+        }
+      }, 1200);
+    },
+    [flushAllDirtyFormatSyncs],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (formatSyncTimerRef.current !== null) {
+        window.clearTimeout(formatSyncTimerRef.current);
+        formatSyncTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const buildBackupPayload = useCallback(
-    () =>
-      serializeWorkspaceState({
+    () => {
+      const syncedDocs =
+        dirtyFormatSourceRef.current.size === 0
+          ? documents
+          : documents.map((d) => syncDocFormatsIfDirty(d));
+      return serializeWorkspaceState({
         activeSpaceId,
         activeDocId,
-        documents,
+        documents: syncedDocs,
         branches,
         snapshots,
         darlings,
@@ -674,7 +742,8 @@ export function App() {
         linkedAssets,
         writingActivity,
         casObjects: casRef.current.exportAll(),
-      }),
+      });
+    },
     [
       activeSpaceId,
       activeDocId,
@@ -685,6 +754,7 @@ export function App() {
       motivations,
       linkedAssets,
       writingActivity,
+      syncDocFormatsIfDirty,
     ],
   );
 
@@ -980,7 +1050,11 @@ export function App() {
   }, [snapshots]);
 
   const commitDocMutation = useCallback(
-    (label: string, mutator: (cur: DocEditableState) => DocEditableState) => {
+    (
+      label: string,
+      mutator: (cur: DocEditableState) => DocEditableState,
+      historyOptions?: HistoryPushOptions,
+    ) => {
       if (!activeDoc || activeDoc.isSealed || (activeDoc.spaceId === 'sp_vault' && !vaultUnlocked)) return;
       const before: DocEditableState = {
         markdownText: activeDoc.markdownText,
@@ -989,8 +1063,16 @@ export function App() {
         activeFormat: activeDoc.activeFormat,
       };
       const after = mutator(before);
+      if (
+        after.markdownText === before.markdownText &&
+        after.latexText === before.latexText &&
+        after.annotations === before.annotations &&
+        after.activeFormat === before.activeFormat
+      ) {
+        return;
+      }
       const history = getHistory(activeDoc.id);
-      history.push(label, before, after);
+      history.push(label, before, after, historyOptions);
       setHistoryTick((t) => t + 1);
 
       setDocuments((prev) =>
@@ -1014,6 +1096,7 @@ export function App() {
   const handleUndo = useCallback(() => {
     if (!activeDoc) return;
     const hist = getHistory(activeDoc.id);
+    hist.breakMergeChain();
     const res = hist.undo();
     if (!res) return;
     setHistoryTick((t) => t + 1);
@@ -1030,12 +1113,14 @@ export function App() {
           : d,
       ),
     );
+    scheduleDeferredFormatSync(activeDoc.id, res.state.activeFormat);
     showToast(`已撤销：${res.label}`);
-  }, [activeDoc, showToast]);
+  }, [activeDoc, scheduleDeferredFormatSync, showToast]);
 
   const handleRedo = useCallback(() => {
     if (!activeDoc) return;
     const hist = getHistory(activeDoc.id);
+    hist.breakMergeChain();
     const res = hist.redo();
     if (!res) return;
     setHistoryTick((t) => t + 1);
@@ -1052,8 +1137,9 @@ export function App() {
           : d,
       ),
     );
+    scheduleDeferredFormatSync(activeDoc.id, res.state.activeFormat);
     showToast(`已重做：${res.label}`);
-  }, [activeDoc, showToast]);
+  }, [activeDoc, scheduleDeferredFormatSync, showToast]);
 
   // Global Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z and Esc shortcuts
   useEffect(() => {
@@ -1123,23 +1209,45 @@ export function App() {
     showToast,
   ]);
 
+  const handleFormatChange = useCallback(
+    (fmt: EditorFormat) => {
+      if (!activeDoc || activeDoc.activeFormat === fmt) return;
+      getHistory(activeDoc.id).breakMergeChain();
+      const synced = syncDocFormatsIfDirty(activeDoc);
+      setDocuments((prev) =>
+        prev.map((d) =>
+          d.id === activeDoc.id
+            ? {
+                ...synced,
+                activeFormat: fmt,
+              }
+            : d,
+        ),
+      );
+    },
+    [activeDoc, syncDocFormatsIfDirty],
+  );
+
   const handleTextChange = (nextText: string) => {
     if (!activeDoc) return;
     const fmt = activeDoc.activeFormat;
     const prevText = fmt === 'markdown' ? activeDoc.markdownText : activeDoc.latexText;
     if (nextText === prevText) return;
 
-    commitDocMutation('编辑正文', (cur) => {
-      const nextAnnotations = adjustAnchorsForTextEdit(prevText, nextText, cur.annotations);
-      const nextMd = fmt === 'markdown' ? nextText : syncFormatText(nextText, 'latex', 'markdown');
-      const nextTex = fmt === 'latex' ? nextText : syncFormatText(nextText, 'markdown', 'latex');
-      return {
-        ...cur,
-        markdownText: nextMd,
-        latexText: nextTex,
-        annotations: nextAnnotations,
-      };
-    });
+    commitDocMutation(
+      '编辑正文',
+      (cur) => {
+        const nextAnnotations = adjustAnchorsForTextEdit(prevText, nextText, cur.annotations);
+        return {
+          ...cur,
+          markdownText: fmt === 'markdown' ? nextText : cur.markdownText,
+          latexText: fmt === 'latex' ? nextText : cur.latexText,
+          annotations: nextAnnotations,
+        };
+      },
+      { mergeKey: 'text-edit', mergeWindowMs: 500, skipClone: true },
+    );
+    scheduleDeferredFormatSync(activeDoc.id, fmt);
   };
 
   const handleAcceptRevision = (annId: string) => {
@@ -1148,28 +1256,27 @@ export function App() {
     if (!ann) return;
     const replacement = ann.revisionKind === 'delete' ? '' : (ann.suggestedText ?? '');
 
-    commitDocMutation('接受修订', (cur) => {
-      const activeText = cur.activeFormat === 'markdown' ? cur.markdownText : cur.latexText;
-      const mutated = applyAnnotationTextReplacement({
-        text: activeText,
-        annotations: cur.annotations,
-        targetId: annId,
-        replacementText: replacement,
-        newStatus: 'accepted',
-      });
-      return {
-        ...cur,
-        markdownText:
-          cur.activeFormat === 'markdown'
-            ? mutated.text
-            : syncFormatText(mutated.text, 'latex', 'markdown'),
-        latexText:
-          cur.activeFormat === 'latex'
-            ? mutated.text
-            : syncFormatText(mutated.text, 'markdown', 'latex'),
-        annotations: mutated.annotations,
-      };
-    });
+    commitDocMutation(
+      '接受修订',
+      (cur) => {
+        const activeText = cur.activeFormat === 'markdown' ? cur.markdownText : cur.latexText;
+        const mutated = applyAnnotationTextReplacement({
+          text: activeText,
+          annotations: cur.annotations,
+          targetId: annId,
+          replacementText: replacement,
+          newStatus: 'accepted',
+        });
+        return {
+          ...cur,
+          markdownText: cur.activeFormat === 'markdown' ? mutated.text : cur.markdownText,
+          latexText: cur.activeFormat === 'latex' ? mutated.text : cur.latexText,
+          annotations: mutated.annotations,
+        };
+      },
+      { skipClone: true },
+    );
+    scheduleDeferredFormatSync(activeDoc.id, activeDoc.activeFormat);
     showToast('已接受修订并同步更新正文（可 Ctrl+Z 撤销）');
   };
 
@@ -1178,98 +1285,214 @@ export function App() {
     const ann = activeDoc.annotations.find((a) => a.id === annId);
     if (!ann) return;
 
-    commitDocMutation('拒绝修订', (cur) => {
-      if (ann.revisionKind === 'insert') {
+    commitDocMutation(
+      '拒绝修订',
+      (cur) => {
+        if (ann.revisionKind === 'insert') {
+          const activeText = cur.activeFormat === 'markdown' ? cur.markdownText : cur.latexText;
+          const mutated = applyAnnotationTextReplacement({
+            text: activeText,
+            annotations: cur.annotations,
+            targetId: annId,
+            replacementText: '',
+            newStatus: 'rejected',
+          });
+          return {
+            ...cur,
+            markdownText: cur.activeFormat === 'markdown' ? mutated.text : cur.markdownText,
+            latexText: cur.activeFormat === 'latex' ? mutated.text : cur.latexText,
+            annotations: mutated.annotations,
+          };
+        }
+        return {
+          ...cur,
+          annotations: cur.annotations.map((a) =>
+            a.id === annId ? { ...a, status: 'rejected' } : a,
+          ),
+        };
+      },
+      { skipClone: true },
+    );
+    if (ann.revisionKind === 'insert') {
+      scheduleDeferredFormatSync(activeDoc.id, activeDoc.activeFormat);
+    }
+    showToast('已拒绝修订并保留原文');
+  };
+
+  const handleToggleResolveComment = (annId: string) => {
+    commitDocMutation(
+      '切换批注状态',
+      (cur) => ({
+        ...cur,
+        annotations: cur.annotations.map((a) =>
+          a.id === annId
+            ? { ...a, status: a.status === 'resolved' ? 'open' : 'resolved' }
+            : a,
+        ),
+      }),
+      { skipClone: true },
+    );
+  };
+
+  const handleReplyComment = (annId: string, text: string) => {
+    commitDocMutation(
+      '回复批注',
+      (cur) => ({
+        ...cur,
+        annotations: cur.annotations.map((a) =>
+          a.id === annId
+            ? {
+                ...a,
+                replies: [
+                  ...a.replies,
+                  {
+                    id: `rep_${Date.now()}`,
+                    author: '我',
+                    date: new Date().toISOString(),
+                    text,
+                  },
+                ],
+              }
+            : a,
+        ),
+      }),
+      { skipClone: true },
+    );
+  };
+
+  const handleApplyAiSuggestion = (annId: string, rewrite: string) => {
+    if (!activeDoc) return;
+    commitDocMutation(
+      '应用 AI 修改建议',
+      (cur) => {
         const activeText = cur.activeFormat === 'markdown' ? cur.markdownText : cur.latexText;
         const mutated = applyAnnotationTextReplacement({
           text: activeText,
           annotations: cur.annotations,
           targetId: annId,
-          replacementText: '',
-          newStatus: 'rejected',
+          replacementText: rewrite,
+          newStatus: 'resolved',
         });
         return {
           ...cur,
-          markdownText:
-            cur.activeFormat === 'markdown'
-              ? mutated.text
-              : syncFormatText(mutated.text, 'latex', 'markdown'),
-          latexText:
-            cur.activeFormat === 'latex'
-              ? mutated.text
-              : syncFormatText(mutated.text, 'markdown', 'latex'),
+          markdownText: cur.activeFormat === 'markdown' ? mutated.text : cur.markdownText,
+          latexText: cur.activeFormat === 'latex' ? mutated.text : cur.latexText,
           annotations: mutated.annotations,
         };
-      }
-      return {
-        ...cur,
-        annotations: cur.annotations.map((a) =>
-          a.id === annId ? { ...a, status: 'rejected' } : a,
-        ),
-      };
-    });
-    showToast('已拒绝修订并保留原文');
-  };
-
-  const handleToggleResolveComment = (annId: string) => {
-    commitDocMutation('切换批注状态', (cur) => ({
-      ...cur,
-      annotations: cur.annotations.map((a) =>
-        a.id === annId
-          ? { ...a, status: a.status === 'resolved' ? 'open' : 'resolved' }
-          : a,
-      ),
-    }));
-  };
-
-  const handleReplyComment = (annId: string, text: string) => {
-    commitDocMutation('回复批注', (cur) => ({
-      ...cur,
-      annotations: cur.annotations.map((a) =>
-        a.id === annId
-          ? {
-              ...a,
-              replies: [
-                ...a.replies,
-                {
-                  id: `rep_${Date.now()}`,
-                  author: '我',
-                  date: new Date().toISOString(),
-                  text,
-                },
-              ],
-            }
-          : a,
-      ),
-    }));
-  };
-
-  const handleApplyAiSuggestion = (annId: string, rewrite: string) => {
-    if (!activeDoc) return;
-    commitDocMutation('应用 AI 修改建议', (cur) => {
-      const activeText = cur.activeFormat === 'markdown' ? cur.markdownText : cur.latexText;
-      const mutated = applyAnnotationTextReplacement({
-        text: activeText,
-        annotations: cur.annotations,
-        targetId: annId,
-        replacementText: rewrite,
-        newStatus: 'resolved',
-      });
-      return {
-        ...cur,
-        markdownText:
-          cur.activeFormat === 'markdown'
-            ? mutated.text
-            : syncFormatText(mutated.text, 'latex', 'markdown'),
-        latexText:
-          cur.activeFormat === 'latex'
-            ? mutated.text
-            : syncFormatText(mutated.text, 'markdown', 'latex'),
-        annotations: mutated.annotations,
-      };
-    });
+      },
+      { skipClone: true },
+    );
+    scheduleDeferredFormatSync(activeDoc.id, activeDoc.activeFormat);
     showToast('已应用 AI 改写建议（可 Ctrl+Z 撤销）');
   };
+
+  const handleBatchAcceptRevisions = useCallback(
+    (targetIds?: string[]) => {
+      if (!activeDoc) return;
+      let count = 0;
+      commitDocMutation(
+        '批量接受修订',
+        (cur) => {
+          const activeText = cur.activeFormat === 'markdown' ? cur.markdownText : cur.latexText;
+          const res = applyBatchAnnotationAction({
+            text: activeText,
+            annotations: cur.annotations,
+            action: 'accept-revisions',
+            targetIds,
+          });
+          count = res.affectedCount;
+          if (count === 0) return cur;
+          return {
+            ...cur,
+            markdownText: cur.activeFormat === 'markdown' ? res.text : cur.markdownText,
+            latexText: cur.activeFormat === 'latex' ? res.text : cur.latexText,
+            annotations: res.annotations,
+          };
+        },
+        { skipClone: true },
+      );
+      if (count > 0) {
+        scheduleDeferredFormatSync(activeDoc.id, activeDoc.activeFormat);
+        showToast(
+          settings.locale === 'zh-CN'
+            ? `已批量接受 ${count} 条修订（可 Ctrl+Z 撤销）`
+            : `Accepted ${count} revisions (Ctrl+Z to undo)`,
+        );
+      }
+    },
+    [activeDoc, commitDocMutation, scheduleDeferredFormatSync, settings.locale, showToast],
+  );
+
+  const handleBatchRejectRevisions = useCallback(
+    (targetIds?: string[]) => {
+      if (!activeDoc) return;
+      let count = 0;
+      commitDocMutation(
+        '批量拒绝修订',
+        (cur) => {
+          const activeText = cur.activeFormat === 'markdown' ? cur.markdownText : cur.latexText;
+          const res = applyBatchAnnotationAction({
+            text: activeText,
+            annotations: cur.annotations,
+            action: 'reject-revisions',
+            targetIds,
+          });
+          count = res.affectedCount;
+          if (count === 0) return cur;
+          return {
+            ...cur,
+            markdownText: cur.activeFormat === 'markdown' ? res.text : cur.markdownText,
+            latexText: cur.activeFormat === 'latex' ? res.text : cur.latexText,
+            annotations: res.annotations,
+          };
+        },
+        { skipClone: true },
+      );
+      if (count > 0) {
+        scheduleDeferredFormatSync(activeDoc.id, activeDoc.activeFormat);
+        showToast(
+          settings.locale === 'zh-CN'
+            ? `已批量拒绝 ${count} 条修订（可 Ctrl+Z 撤销）`
+            : `Rejected ${count} revisions (Ctrl+Z to undo)`,
+        );
+      }
+    },
+    [activeDoc, commitDocMutation, scheduleDeferredFormatSync, settings.locale, showToast],
+  );
+
+  const handleBatchResolveComments = useCallback(
+    (targetIds?: string[]) => {
+      if (!activeDoc) return;
+      let count = 0;
+      commitDocMutation(
+        '批量解决批注',
+        (cur) => {
+          const activeText = cur.activeFormat === 'markdown' ? cur.markdownText : cur.latexText;
+          const res = applyBatchAnnotationAction({
+            text: activeText,
+            annotations: cur.annotations,
+            action: 'resolve-comments',
+            targetIds,
+          });
+          count = res.affectedCount;
+          if (count === 0) return cur;
+          return {
+            ...cur,
+            annotations: res.annotations,
+          };
+        },
+        { skipClone: true },
+      );
+      if (count > 0) {
+        showToast(
+          settings.locale === 'zh-CN'
+            ? `已批量解决 ${count} 条批注（可 Ctrl+Z 撤销）`
+            : `Resolved ${count} comments (Ctrl+Z to undo)`,
+        );
+      }
+    },
+    [activeDoc, commitDocMutation, settings.locale, showToast],
+  );
 
   const handleImportWordBytes = async (fileName: string, bytes: Uint8Array) => {
     const isLegacyDoc = /\.doc$/i.test(fileName);
@@ -1490,7 +1713,11 @@ export function App() {
 
   const handleSaveMilestone = async () => {
     if (!activeDoc) return;
-    const branchSnaps = docSnapshots.filter((s) => s.branchId === activeDoc.currentBranchId);
+    const syncedDoc = syncDocFormatsIfDirty(activeDoc);
+    if (syncedDoc !== activeDoc) {
+      setDocuments((prev) => prev.map((d) => (d.id === syncedDoc.id ? syncedDoc : d)));
+    }
+    const branchSnaps = docSnapshots.filter((s) => s.branchId === syncedDoc.currentBranchId);
     const latest = branchSnaps[branchSnaps.length - 1] ?? docSnapshots[docSnapshots.length - 1] ?? null;
     const prevText = latest ? (casRef.current.getText(latest.markdownHash) ?? '') : '';
 
@@ -1499,7 +1726,7 @@ export function App() {
       try {
         const aiRes = await generateSnapshotSummary({
           oldText: prevText,
-          newText: activeDoc.markdownText,
+          newText: syncedDoc.markdownText,
           settings,
           policy: effectiveAiPolicy,
         });
@@ -1511,7 +1738,7 @@ export function App() {
 
     const res = await createDocumentSnapshot({
       cas: casRef.current,
-      doc: activeDoc,
+      doc: syncedDoc,
       latestSnapshot: latest,
       label: `里程碑 v${docSnapshots.length + 1}`,
       isMilestone: true,
@@ -1527,8 +1754,8 @@ export function App() {
     if (latest) {
       const newDarlings = extractDeletedDarlings({
         oldText: prevText,
-        newText: activeDoc.markdownText,
-        documentId: activeDoc.id,
+        newText: syncedDoc.markdownText,
+        documentId: syncedDoc.id,
         snapshotId: res.snapshot.id,
       });
       if (newDarlings.length > 0) {
@@ -1540,7 +1767,7 @@ export function App() {
     const snapId = res.snapshot.id;
     setLinkedAssets((prev) =>
       prev.map((a) =>
-        a.documentId === activeDoc.id ? { ...a, snapshotIds: [...a.snapshotIds, snapId] } : a,
+        a.documentId === syncedDoc.id ? { ...a, snapshotIds: [...a.snapshotIds, snapId] } : a,
       ),
     );
     const today = new Date().toISOString().slice(0, 10);
@@ -1564,13 +1791,14 @@ export function App() {
 
   const handleToggleSeal = async () => {
     if (!activeDoc) return;
-    const nextSealed = !activeDoc.isSealed;
-    const hash = nextSealed ? await sha256Hex(activeDoc.markdownText) : undefined;
+    const syncedDoc = syncDocFormatsIfDirty(activeDoc);
+    const nextSealed = !syncedDoc.isSealed;
+    const hash = nextSealed ? await sha256Hex(syncedDoc.markdownText) : undefined;
     setDocuments((prev) =>
       prev.map((d) =>
-        d.id === activeDoc.id
+        d.id === syncedDoc.id
           ? {
-              ...d,
+              ...syncedDoc,
               isSealed: nextSealed,
               sealedHash: hash,
               sealedAt: nextSealed ? new Date().toISOString() : undefined,
@@ -1584,35 +1812,43 @@ export function App() {
 
   const handleExportWord = async (mode: 'clean' | 'redline') => {
     if (!activeDoc) return;
+    const syncedDoc = syncDocFormatsIfDirty(activeDoc);
+    if (syncedDoc !== activeDoc) {
+      setDocuments((prev) => prev.map((d) => (d.id === syncedDoc.id ? syncedDoc : d)));
+    }
     const baselineSnap = docSnapshots[0];
     const baselineText = baselineSnap ? casRef.current.getText(baselineSnap.markdownHash) : undefined;
 
     const bytes = await exportToDocx({
-      baseDocxBase64: activeDoc.baseDocxBase64,
-      coverXmlNodes: activeDoc.coverXmlNodes,
-      bodyText: activeDoc.activeFormat === 'markdown' ? activeDoc.markdownText : activeDoc.latexText,
-      format: activeDoc.activeFormat,
-      citationsSidecar: activeDoc.citationsSidecar,
-      styleSidecar: activeDoc.styleSidecar,
+      baseDocxBase64: syncedDoc.baseDocxBase64,
+      coverXmlNodes: syncedDoc.coverXmlNodes,
+      bodyText: syncedDoc.activeFormat === 'markdown' ? syncedDoc.markdownText : syncedDoc.latexText,
+      format: syncedDoc.activeFormat,
+      citationsSidecar: syncedDoc.citationsSidecar,
+      styleSidecar: syncedDoc.styleSidecar,
       mode,
       baselineText,
-      title: activeDoc.title,
+      title: syncedDoc.title,
     });
 
     const suffix = mode === 'redline' ? '_带修订红线版' : '_带原封面交付版';
     triggerBrowserDownload(
-      `${activeDoc.title}${suffix}.docx`,
+      `${syncedDoc.title}${suffix}.docx`,
       bytes,
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     );
-    showToast(`已生成并导出：${activeDoc.title}${suffix}.docx`);
+    showToast(`已生成并导出：${syncedDoc.title}${suffix}.docx`);
   };
 
   const handleExportText = (fmt: EditorFormat) => {
     if (!activeDoc) return;
-    const content = fmt === 'markdown' ? activeDoc.markdownText : activeDoc.latexText;
+    const syncedDoc = syncDocFormatsIfDirty(activeDoc);
+    if (syncedDoc !== activeDoc) {
+      setDocuments((prev) => prev.map((d) => (d.id === syncedDoc.id ? syncedDoc : d)));
+    }
+    const content = fmt === 'markdown' ? syncedDoc.markdownText : syncedDoc.latexText;
     const ext = fmt === 'markdown' ? 'md' : 'tex';
-    triggerBrowserDownload(`${activeDoc.title}.${ext}`, content, 'text/plain;charset=utf-8');
+    triggerBrowserDownload(`${syncedDoc.title}.${ext}`, content, 'text/plain;charset=utf-8');
   };
 
   const handleToggleWatch = async () => {
@@ -1743,8 +1979,11 @@ export function App() {
     settings.phrasebank,
   ]);
 
+  const activeTutorialSceneRef = useRef<TutorialSceneId | null>(null);
+
   const applyTutorialScene = useCallback(
     (scene: TutorialSceneId) => {
+      activeTutorialSceneRef.current = scene;
       const docs = getActiveDocuments(documentsRef.current);
       const allDocs = documentsRef.current;
       const thesisDoc =
@@ -1819,6 +2058,19 @@ export function App() {
             Object.values(parsedBundlesRef.current)[0];
           if (bundle) {
             setCoverModalData({ docId: targetId, bundle });
+          } else {
+            buildSamplePaperDocx()
+              .then((bytes) => parseDocxBytes(bytes))
+              .then((built) => {
+                parsedBundlesRef.current[targetId] = built;
+                if (
+                  activeTutorialSceneRef.current === 'cover-split' &&
+                  backDispatcherStateRef.current.tutorialMode
+                ) {
+                  setCoverModalData({ docId: targetId, bundle: built });
+                }
+              })
+              .catch(() => {});
           }
           break;
         }
@@ -2487,12 +2739,19 @@ export function App() {
               triggerAppHaptic('light');
               setRevisionOrbMenuOpen((v) => !v);
             }}
+            aria-label={settings.locale === 'zh-CN' ? '修订模式菜单' : 'Revision Mode Menu'}
             title={settings.locale === 'zh-CN' ? '修订模式菜单' : 'Revision Mode Menu'}
           >
-            <span className="arc-orb-dot" />
-            <span>{settings.locale === 'zh-CN' ? '修订' : 'Rev'}</span>
-            {openAnnotationCount > 0 && (
-              <span className="arc-orb-badge">{openAnnotationCount}</span>
+            {deviceEnv.isPhone || deviceEnv.isTabletPortrait ? (
+              <Menu size={16} />
+            ) : (
+              <>
+                <span className="arc-orb-dot" />
+                <span>{settings.locale === 'zh-CN' ? '修订' : 'Rev'}</span>
+                {openAnnotationCount > 0 && (
+                  <span className="arc-orb-badge">{openAnnotationCount}</span>
+                )}
+              </>
             )}
           </button>
           {revisionOrbMenuOpen && (
@@ -2569,12 +2828,7 @@ export function App() {
         onEnterFullscreen={() => setIsFullscreen(true)}
         onUndo={handleUndo}
         onRedo={handleRedo}
-        onFormatChange={(fmt) => {
-          if (!activeDoc) return;
-          setDocuments((prev) =>
-            prev.map((d) => (d.id === activeDoc.id ? { ...d, activeFormat: fmt } : d)),
-          );
-        }}
+        onFormatChange={handleFormatChange}
         onToggleSplitPreview={() => setSplitPreview((v) => !v)}
         onSaveMilestone={handleSaveMilestone}
         onToggleSeal={handleToggleSeal}
@@ -2768,11 +3022,7 @@ export function App() {
           onExitRevisionGuardRef={revisionExitGuardRef}
           onUndo={handleUndo}
           onRedo={handleRedo}
-          onFormatChange={(fmt) =>
-            setDocuments((prev) =>
-              prev.map((d) => (d.id === activeDoc.id ? { ...d, activeFormat: fmt } : d)),
-            )
-          }
+          onFormatChange={handleFormatChange}
           onToggleSplitPreview={() => setSplitPreview((v) => !v)}
           onSaveMilestone={handleSaveMilestone}
           onOpenCameraScan={() => setCameraScanOpen(true)}
@@ -2817,6 +3067,9 @@ export function App() {
           onToggleResolveComment={handleToggleResolveComment}
           onReplyComment={handleReplyComment}
           onApplyAiSuggestion={handleApplyAiSuggestion}
+          onBatchAcceptRevisions={handleBatchAcceptRevisions}
+          onBatchRejectRevisions={handleBatchRejectRevisions}
+          onBatchResolveComments={handleBatchResolveComments}
           onOpenSkillsManager={() => {
             setSettingsInitialTab('ai');
             setSettingsOpen(true);
@@ -2972,6 +3225,7 @@ export function App() {
       {branchModalOpen && activeDoc && (
         <BranchModal
           isZh={settings.locale === 'zh-CN'}
+          isTouch={deviceEnv.isTouch}
           docTitle={activeDoc.title}
           currentBranchId={activeDoc.currentBranchId}
           branches={docBranches}
@@ -3068,6 +3322,7 @@ export function App() {
       {paperStudioOpen && activeDoc && (
         <PaperStudioModal
           initialTab={paperStudioInitialTab}
+          isTouch={deviceEnv.isTouch}
           doc={activeDoc}
           snapshots={docSnapshots}
           cas={casRef.current}
@@ -3148,11 +3403,12 @@ export function App() {
             const lockedDocs = await Promise.all(
               documents.map(async (d) => {
                 if (d.spaceId !== 'sp_vault') return d;
-                const envelope = await encryptVaultText(d.markdownText, passcode);
+                const synced = syncDocFormatsIfDirty(d);
+                const envelope = await encryptVaultText(synced.markdownText, passcode);
                 const masked =
                   '🔒 [AES-256-GCM 已加密上锁]\n\n该档案正文已加密为认证密文信封。点击左侧栏「解锁保险箱」输入主密码即可解密恢复。';
                 return {
-                  ...d,
+                  ...synced,
                   markdownText: masked,
                   latexText: masked,
                   encryptedPayload: envelope,

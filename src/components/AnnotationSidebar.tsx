@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   MessageSquare,
   GitPullRequestDraft,
@@ -11,19 +11,25 @@ import {
   Crosshair,
 } from 'lucide-react';
 import { generateAnnotationRewrite, AiPrivacyBlockedError } from '../core/aiGateway';
-import { computeParallelAnnotationLayout } from '../core/annotationLayout';
+import {
+  computeParallelAnnotationLayout,
+  computeVisibleAnnotationWindow,
+} from '../core/annotationLayout';
 import type { AiPrivacyPolicy, AnnotationItem, AppSettings } from '../types/archive';
 import type { AnchorGeometry } from './DocumentEditor';
 import type { I18nDict } from '../i18n/dictionaries';
 
 interface CardHeightMetrics {
   collapsedHeight: number;
-  expandedHeight: number;
+  expandedHeight?: number;
 }
 
 interface AnnotationSidebarProps {
   dict: I18nDict;
   annotations: AnnotationItem[];
+  totalAnnotationCount?: number;
+  isFiltered?: boolean;
+  onClearFilters?: () => void;
   anchors: Record<string, AnchorGeometry>;
   documentText: string;
   settings: AppSettings;
@@ -31,6 +37,7 @@ interface AnnotationSidebarProps {
   hoveredId: string | null;
   selectedId: string | null;
   minCanvasHeight?: number;
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
   readOnly: boolean;
   onHover: (id: string | null) => void;
   onSelect: (id: string | null) => void;
@@ -48,6 +55,9 @@ const CARD_VERTICAL_CHROME = 20; // 9px top padding + 9px bottom padding + 2px b
 export const AnnotationSidebar: React.FC<AnnotationSidebarProps> = ({
   dict,
   annotations,
+  totalAnnotationCount,
+  isFiltered = false,
+  onClearFilters,
   anchors,
   documentText,
   settings,
@@ -55,6 +65,7 @@ export const AnnotationSidebar: React.FC<AnnotationSidebarProps> = ({
   hoveredId,
   selectedId,
   minCanvasHeight = 0,
+  scrollContainerRef,
   readOnly,
   onHover,
   onSelect,
@@ -72,62 +83,144 @@ export const AnnotationSidebar: React.FC<AnnotationSidebarProps> = ({
   >({});
   const [aiLoadingId, setAiLoadingId] = useState<string | null>(null);
   const [measuredMetrics, setMeasuredMetrics] = useState<Record<string, CardHeightMetrics>>({});
+  const [viewport, setViewport] = useState<{ scrollTop: number; viewportHeight: number }>({
+    scrollTop: 0,
+    viewportHeight: 800,
+  });
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const prevSelectedIdRef = useRef<string | null>(selectedId);
 
   const cardNodesRef = useRef<Record<string, HTMLDivElement | null>>({});
   const headerNodesRef = useRef<Record<string, HTMLDivElement | null>>({});
   const previewInnerNodesRef = useRef<Record<string, HTMLDivElement | null>>({});
   const bodyInnerNodesRef = useRef<Record<string, HTMLDivElement | null>>({});
+  const roRef = useRef<ResizeObserver | null>(null);
+  const observedElsRef = useRef<Set<Element>>(new Set());
+  const measureRafRef = useRef<number | null>(null);
+  const scrollRafRef = useRef<number | null>(null);
 
-  // Measure both collapsed and full expanded target heights immediately so cards animate
-  // smoothly to their exact final non-overlapping parallel positions on expand/collapse.
-  useLayoutEffect(() => {
-    const syncHeights = () => {
-      setMeasuredMetrics((prev) => {
-        let changed = false;
-        const next: Record<string, CardHeightMetrics> = { ...prev };
+  // Retain closing card body briefly during CSS collapse animation, then unmount heavy body DOM
+  useEffect(() => {
+    const prev = prevSelectedIdRef.current;
+    prevSelectedIdRef.current = selectedId;
+    if (prev && prev !== selectedId) {
+      setClosingId(prev);
+      const timer = window.setTimeout(() => {
+        setClosingId((cur) => (cur === prev ? null : cur));
+      }, 340);
+      return () => window.clearTimeout(timer);
+    }
+  }, [selectedId]);
 
-        for (const ann of annotations) {
-          const headerEl = headerNodesRef.current[ann.id];
-          const previewInnerEl = previewInnerNodesRef.current[ann.id];
-          const bodyInnerEl = bodyInnerNodesRef.current[ann.id];
-          if (!headerEl || !bodyInnerEl) continue;
+  const syncHeights = useCallback(() => {
+    const scrollEl = scrollContainerRef?.current;
+    if (scrollEl) {
+      const vh = scrollEl.clientHeight;
+      if (vh > 0) {
+        setViewport((prev) =>
+          Math.abs(prev.viewportHeight - vh) > 2
+            ? { ...prev, viewportHeight: vh }
+            : prev,
+        );
+      }
+    }
 
-          const headerH = Math.ceil(headerEl.offsetHeight);
-          const previewH = Math.ceil(previewInnerEl?.scrollHeight ?? 0);
-          const bodyH = Math.ceil(bodyInnerEl.scrollHeight);
+    setMeasuredMetrics((prev) => {
+      let changed = false;
+      const next: Record<string, CardHeightMetrics> = { ...prev };
 
-          const collapsedHeight = Math.max(48, headerH + previewH + CARD_VERTICAL_CHROME);
-          const expandedHeight = Math.max(collapsedHeight + 48, headerH + bodyH + CARD_VERTICAL_CHROME);
+      for (const [annId, headerEl] of Object.entries(headerNodesRef.current)) {
+        if (!headerEl) continue;
+        const previewInnerEl = previewInnerNodesRef.current[annId];
+        const bodyInnerEl = bodyInnerNodesRef.current[annId];
 
-          const existing = prev[ann.id];
-          if (
-            !existing ||
-            Math.abs(existing.collapsedHeight - collapsedHeight) > 1 ||
-            Math.abs(existing.expandedHeight - expandedHeight) > 1
-          ) {
-            next[ann.id] = { collapsedHeight, expandedHeight };
-            changed = true;
-          }
+        const headerH = Math.ceil(headerEl.offsetHeight);
+        const previewH = Math.ceil(previewInnerEl?.scrollHeight ?? 0);
+        const collapsedHeight = Math.max(48, headerH + previewH + CARD_VERTICAL_CHROME);
+        const existing = prev[annId];
+        const expandedHeight = bodyInnerEl
+          ? Math.max(
+              collapsedHeight + 48,
+              headerH + Math.ceil(bodyInnerEl.scrollHeight) + CARD_VERTICAL_CHROME,
+            )
+          : existing?.expandedHeight;
+
+        if (
+          !existing ||
+          Math.abs(existing.collapsedHeight - collapsedHeight) > 1 ||
+          (expandedHeight !== undefined &&
+            (existing.expandedHeight === undefined ||
+              Math.abs(existing.expandedHeight - expandedHeight) > 1))
+        ) {
+          next[annId] = { collapsedHeight, expandedHeight };
+          changed = true;
         }
+      }
 
-        return changed ? next : prev;
+      return changed ? next : prev;
+    });
+  }, [scrollContainerRef]);
+
+  const scheduleSyncHeights = useCallback(() => {
+    if (measureRafRef.current !== null) return;
+    measureRafRef.current = requestAnimationFrame(() => {
+      measureRafRef.current = null;
+      syncHeights();
+    });
+  }, [syncHeights]);
+
+  // Single persistent ResizeObserver reused across renders and card virtualization
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      scheduleSyncHeights();
+    });
+    roRef.current = ro;
+    const observed = observedElsRef.current;
+    return () => {
+      if (measureRafRef.current !== null) {
+        cancelAnimationFrame(measureRafRef.current);
+        measureRafRef.current = null;
+      }
+      ro.disconnect();
+      roRef.current = null;
+      observed.clear();
+    };
+  }, [scheduleSyncHeights]);
+
+  // Track annotation pane scroll viewport for virtualization (rAF-throttled, >=40px threshold)
+  useEffect(() => {
+    const scrollEl = scrollContainerRef?.current;
+    if (!scrollEl) return;
+
+    setViewport({
+      scrollTop: scrollEl.scrollTop,
+      viewportHeight: scrollEl.clientHeight > 0 ? scrollEl.clientHeight : 800,
+    });
+
+    const onScroll = () => {
+      if (scrollRafRef.current !== null) return;
+      scrollRafRef.current = requestAnimationFrame(() => {
+        scrollRafRef.current = null;
+        const st = scrollEl.scrollTop;
+        const vh = scrollEl.clientHeight > 0 ? scrollEl.clientHeight : 800;
+        setViewport((prev) =>
+          Math.abs(prev.scrollTop - st) >= 40 || Math.abs(prev.viewportHeight - vh) > 2
+            ? { scrollTop: st, viewportHeight: vh }
+            : prev,
+        );
       });
     };
 
-    syncHeights();
-
-    if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => {
-      syncHeights();
-    });
-    for (const ann of annotations) {
-      const cardEl = cardNodesRef.current[ann.id];
-      const bodyInnerEl = bodyInnerNodesRef.current[ann.id];
-      if (cardEl) ro.observe(cardEl);
-      if (bodyInnerEl) ro.observe(bodyInnerEl);
-    }
-    return () => ro.disconnect();
-  }, [annotations, aiPreviews, selectedId]);
+    scrollEl.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      scrollEl.removeEventListener('scroll', onScroll);
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+    };
+  }, [scrollContainerRef]);
 
   const targetHeights = useMemo(() => {
     const map: Record<string, number> = {};
@@ -161,6 +254,57 @@ export const AnnotationSidebar: React.FC<AnnotationSidebarProps> = ({
     [annotations, anchors, targetHeights, selectedId],
   );
 
+  // Viewport virtualization: only mount cards near the visible scroll window + pinned cards
+  const visibleCards = useMemo(
+    () =>
+      scrollContainerRef
+        ? computeVisibleAnnotationWindow({
+            placements: positionedCards,
+            scrollTop: viewport.scrollTop,
+            viewportHeight: viewport.viewportHeight,
+            overscanPx: 480,
+            pinnedIds: [selectedId, hoveredId, closingId],
+          })
+        : positionedCards,
+    [
+      scrollContainerRef,
+      positionedCards,
+      viewport.scrollTop,
+      viewport.viewportHeight,
+      selectedId,
+      hoveredId,
+      closingId,
+    ],
+  );
+
+  // Sync ResizeObserver targets strictly to currently mounted visible cards + scroller
+  useLayoutEffect(() => {
+    syncHeights();
+    const ro = roRef.current;
+    if (!ro) return;
+
+    const desired = new Set<Element>();
+    if (scrollContainerRef?.current) desired.add(scrollContainerRef.current);
+    for (const { ann } of visibleCards) {
+      const cardEl = cardNodesRef.current[ann.id];
+      const bodyInnerEl = bodyInnerNodesRef.current[ann.id];
+      if (cardEl) desired.add(cardEl);
+      if (bodyInnerEl) desired.add(bodyInnerEl);
+    }
+
+    for (const el of observedElsRef.current) {
+      if (!desired.has(el)) {
+        ro.unobserve(el);
+      }
+    }
+    for (const el of desired) {
+      if (!observedElsRef.current.has(el)) {
+        ro.observe(el);
+      }
+    }
+    observedElsRef.current = desired;
+  }, [visibleCards, aiPreviews, selectedId, scrollContainerRef, syncHeights]);
+
   useEffect(() => {
     const rectMap: Record<string, { top: number; height: number }> = {};
     for (const p of positionedCards) {
@@ -177,6 +321,8 @@ export const AnnotationSidebar: React.FC<AnnotationSidebarProps> = ({
       : 400;
   const totalHeight = Math.max(400, cardsBottom, minCanvasHeight);
 
+  const hasAnyInDoc = (totalAnnotationCount ?? annotations.length) > 0;
+
   return (
     <div
       className="arc-annotation-canvas"
@@ -189,12 +335,23 @@ export const AnnotationSidebar: React.FC<AnnotationSidebarProps> = ({
     >
       {annotations.length === 0 && (
         <div style={{ padding: 18, fontSize: 12.5, color: 'var(--text-muted)', textAlign: 'center' }}>
-          {dict.annotations.empty}
+          <div>{isFiltered && hasAnyInDoc ? dict.annotations.noMatch : dict.annotations.empty}</div>
+          {isFiltered && hasAnyInDoc && onClearFilters && (
+            <button
+              type="button"
+              className="arc-btn"
+              style={{ marginTop: 10, height: 28, fontSize: 11.5 }}
+              onClick={onClearFilters}
+            >
+              {dict.annotations.clearFilters}
+            </button>
+          )}
         </div>
       )}
 
-      {positionedCards.map(({ ann, top }) => {
+      {visibleCards.map(({ ann, top }) => {
         const isExpanded = selectedId === ann.id;
+        const mountBody = isExpanded || closingId === ann.id;
         const isHovered = hoveredId === ann.id;
         const isResolved = ann.status !== 'open';
         const isComment = ann.type === 'comment';
@@ -213,7 +370,8 @@ export const AnnotationSidebar: React.FC<AnnotationSidebarProps> = ({
             data-ann-card-id={ann.id}
             data-tour="annotation-card"
             ref={(el) => {
-              cardNodesRef.current[ann.id] = el;
+              if (el) cardNodesRef.current[ann.id] = el;
+              else delete cardNodesRef.current[ann.id];
             }}
             style={{ transform: `translate3d(${shiftX}px, ${top}px, 0)` }}
             className={`arc-annotation-card ${isComment ? 'type-comment' : 'type-revision'} ${isExpanded ? 'is-expanded' : 'is-collapsed'} ${isHovered ? 'hovered' : ''} ${isResolved ? 'resolved' : ''}`}
@@ -228,7 +386,8 @@ export const AnnotationSidebar: React.FC<AnnotationSidebarProps> = ({
           >
             <div
               ref={(el) => {
-                headerNodesRef.current[ann.id] = el;
+                if (el) headerNodesRef.current[ann.id] = el;
+                else delete headerNodesRef.current[ann.id];
               }}
               className="arc-annotation-header"
               role="button"
@@ -285,7 +444,8 @@ export const AnnotationSidebar: React.FC<AnnotationSidebarProps> = ({
             <div className="arc-annotation-preview-wrap" aria-hidden={isExpanded}>
               <div
                 ref={(el) => {
-                  previewInnerNodesRef.current[ann.id] = el;
+                  if (el) previewInnerNodesRef.current[ann.id] = el;
+                  else delete previewInnerNodesRef.current[ann.id];
                 }}
                 className="arc-annotation-preview-inner"
               >
@@ -295,14 +455,16 @@ export const AnnotationSidebar: React.FC<AnnotationSidebarProps> = ({
               </div>
             </div>
 
-            <div className="arc-annotation-body-wrap" aria-hidden={!isExpanded}>
-              <div
-                ref={(el) => {
-                  bodyInnerNodesRef.current[ann.id] = el;
-                }}
-                className="arc-annotation-body-inner"
-                onClick={(e) => e.stopPropagation()}
-              >
+            {mountBody && (
+              <div className="arc-annotation-body-wrap" aria-hidden={!isExpanded}>
+                <div
+                  ref={(el) => {
+                    if (el) bodyInnerNodesRef.current[ann.id] = el;
+                    else delete bodyInnerNodesRef.current[ann.id];
+                  }}
+                  className="arc-annotation-body-inner"
+                  onClick={(e) => e.stopPropagation()}
+                >
                 {ann.originalText && (
                   <div
                     className="arc-annotation-quote"
@@ -563,8 +725,9 @@ export const AnnotationSidebar: React.FC<AnnotationSidebarProps> = ({
                     </button>
                   </div>
                 )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         );
       })}

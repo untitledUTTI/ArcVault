@@ -37,11 +37,12 @@ function locateChangedSections(baselineText: string, revisedText: string): Array
 
   const headingOf = (txt: string, fallbackHeading: string) => {
     const lines = txt.split('\n');
+    let last = fallbackHeading;
     for (const l of lines) {
       const m = l.match(/^#{1,3}\s+(.+)$/);
-      if (m) return m[1].trim();
+      if (m) last = m[1].trim();
     }
-    return fallbackHeading;
+    return last;
   };
 
   let curSection = '全文局部';
